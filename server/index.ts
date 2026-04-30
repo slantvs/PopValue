@@ -1,6 +1,8 @@
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { mockEbayListings, mockSoldListings } from '../src/data/mockData';
 import type { EbayListing } from '../src/types';
 
@@ -8,6 +10,7 @@ dotenv.config();
 
 const app = express();
 const port = Number(process.env.PORT ?? 8787);
+const distPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
 
 let tokenCache: { token: string; expiresAt: number } | null = null;
 
@@ -229,6 +232,18 @@ interface EbaySaleSummary {
   lastSoldDate?: string;
 }
 
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(distPath));
+  app.use((request, response, next) => {
+    if (request.path.startsWith('/api')) {
+      next();
+      return;
+    }
+
+    response.sendFile(path.join(distPath, 'index.html'));
+  });
+}
+
 app.listen(port, () => {
-  console.log(`PopValue API running on http://localhost:${port}`);
+  console.log(`PopValue running on http://localhost:${port}`);
 });
