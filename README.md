@@ -23,6 +23,18 @@ cp .env.example .env
 
 Then fill in eBay credentials if you want live API lookups. The `.env` file is ignored by Git and should stay private.
 
+If your eBay App ID or Cert ID contains `SBX`, those are sandbox credentials. Use sandbox credentials only with:
+
+```bash
+EBAY_API_BASE_URL=https://api.sandbox.ebay.com
+```
+
+For real marketplace listings, use production eBay credentials with:
+
+```bash
+EBAY_API_BASE_URL=https://api.ebay.com
+```
+
 ## Run Locally
 
 Start the client and API together:
@@ -64,11 +76,12 @@ Server-only environment variables live in `.env`:
 - `EBAY_ACCESS_TOKEN` can be used for a short-lived app token.
 - `EBAY_CLIENT_ID` and `EBAY_CLIENT_SECRET` let the server mint app tokens.
 - `EBAY_MARKETPLACE_ID` defaults to `EBAY_US`.
-- `EBAY_API_BASE_URL` defaults to `https://api.ebay.com`.
+- `EBAY_API_BASE_URL` defaults to `https://api.ebay.com`; use `https://api.sandbox.ebay.com` with `SBX` sandbox credentials.
 - `EBAY_ENABLE_SOLD_LOOKUP` should only be enabled after Marketplace Insights access is approved.
 - `PORT` defaults to `8787`.
 
 Do not prefix secrets with `VITE_`; that would expose them to the browser bundle.
+Do not commit `.env`, screenshots of credentials, or eBay Cert IDs. If a Client Secret/Cert ID is shared publicly, rotate it in the eBay developer portal before using it.
 
 ## Deployment
 

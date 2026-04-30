@@ -21,6 +21,8 @@ Set these environment variables in the host dashboard:
 - `EBAY_ENABLE_SOLD_LOOKUP`
 - `PORT`, if the host requires it
 
+Use `https://api.sandbox.ebay.com` for sandbox credentials that contain `SBX`, and `https://api.ebay.com` for production credentials. Sandbox credentials are useful for proving OAuth wiring, but production credentials are required for real marketplace listing data.
+
 Build command:
 
 ```bash
