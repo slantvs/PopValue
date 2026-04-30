@@ -1,6 +1,6 @@
-# FunkScan
+# PopValue
 
-FunkScan is a React and Express MVP for estimating Funko Pop values. It can scan or upload a box image, match likely figures, compare eBay listings and retail references, and save collection entries in browser storage.
+PopValue is a React and Express MVP for estimating Funko Pop values. It can scan or upload a box image, match likely figures, compare eBay listings and retail references, and save collection entries in browser storage.
 
 ## Local Setup
 
@@ -42,7 +42,7 @@ The app falls back to mock data when eBay credentials are not configured.
 
 GitHub Pages publishes the static frontend here:
 
-https://slantvs.github.io/FunkScan/
+https://slantvs.github.io/PopValue/
 
 That demo can load the app UI and mock fallback data. Live eBay lookups still need a hosted Node API with private server-side environment variables.
 

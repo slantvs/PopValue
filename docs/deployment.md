@@ -1,6 +1,6 @@
 # Deployment Notes
 
-FunkScan has two runtime pieces:
+PopValue has two runtime pieces:
 
 - Vite frontend served from the production `dist` build.
 - Express API in `server/index.ts` for eBay token minting and marketplace search.
@@ -56,7 +56,7 @@ Backend:
 GitHub Pages serves the built frontend at:
 
 ```text
-https://slantvs.github.io/FunkScan/
+https://slantvs.github.io/PopValue/
 ```
 
-The Pages workflow builds with `GITHUB_PAGES=true`, which makes Vite emit asset paths under `/FunkScan/`. Live eBay lookups will not work on Pages without a hosted API. This is fine for a mock-data demo, but not for the full product.
+The Pages workflow builds with `GITHUB_PAGES=true`, which makes Vite emit asset paths under `/PopValue/`. Live eBay lookups will not work on Pages without a hosted API. This is fine for a mock-data demo, but not for the full product.
