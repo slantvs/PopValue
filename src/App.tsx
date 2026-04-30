@@ -14,6 +14,7 @@ import { ebayService } from './services/ebayService';
 import { identifyService } from './services/identifyService';
 import { retailService } from './services/retailService';
 import { scanService } from './services/scanService';
+import type { CameraScannerControls } from './services/scanService';
 import { valuationService } from './services/valuationService';
 
 const emptyManual: ManualSearchFields = {
@@ -42,11 +43,15 @@ function App() {
   const [loading, setLoading] = useState('');
   const [error, setError] = useState('');
   const imagePreviewRef = useRef<string | undefined>(undefined);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const cameraControlsRef = useRef<CameraScannerControls | null>(null);
+  const [cameraActive, setCameraActive] = useState(false);
 
   const totalCollectionValue = useMemo(() => collectionService.totalEstimatedValue(collection), [collection]);
 
   useEffect(() => {
     return () => {
+      cameraControlsRef.current?.stop();
       if (imagePreviewRef.current) URL.revokeObjectURL(imagePreviewRef.current);
     };
   }, []);
@@ -59,6 +64,27 @@ function App() {
     setScanResult(scan);
   }
 
+  async function identifyAndLookup(
+    scan: ScanResult,
+    minimumScore: number,
+    reviewMessage: string,
+    emptyMessage: string
+  ) {
+    applyScanResult(scan);
+    const matches = identifyService.identifyFromScan(scan, manual);
+    setCandidates(matches);
+
+    if (matches[0]?.score >= minimumScore) {
+      await lookupItem(matches[0].item);
+      return;
+    }
+
+    setSelectedItem(null);
+    setValuation(null);
+    setLoading('');
+    setError(matches.length ? reviewMessage : emptyMessage);
+  }
+
   async function handleImageUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -68,18 +94,14 @@ function App() {
 
     try {
       const scan = await scanService.scanImage(file);
-      applyScanResult(scan);
-      const matches = identifyService.identifyFromScan(scan, manual);
-      setCandidates(matches);
-
-      if (matches[0]?.score >= 0.65) {
-        await lookupItem(matches[0].item);
-      } else {
-        setSelectedItem(null);
-        setValuation(null);
-        setLoading('');
-        setError('Low confidence scan. Select the best possible match or refine manual details.');
-      }
+      await identifyAndLookup(
+        scan,
+        0.65,
+        scan.rawValue
+          ? 'Barcode read, but match confidence is low. Select the best possible match or refine manual details.'
+          : 'No barcode found. Try a closer, well-lit photo or use manual details.',
+        'No matches found from that image. Try manual details.'
+      );
     } catch {
       setError('Could not read that image. Try another photo or use manual search.');
       setLoading('');
@@ -93,18 +115,57 @@ function App() {
 
     const query = identifyService.buildSearchQuery(manual);
     const scan = scanService.buildManualScan(query);
-    applyScanResult(scan);
-    const matches = identifyService.identifyFromScan(scan, manual);
-    setCandidates(matches);
+    await identifyAndLookup(
+      scan,
+      0.55,
+      'Review possible matches before estimating value.',
+      'No matches found. Add more details.'
+    );
+  }
 
-    if (matches[0]?.score >= 0.55) {
-      await lookupItem(matches[0].item);
-    } else {
-      setSelectedItem(null);
-      setValuation(null);
+  async function startCameraScan() {
+    const video = videoRef.current;
+    if (!video) return;
+
+    setError('');
+    setCameraActive(true);
+    setLoading('Starting camera scanner...');
+    let detected = false;
+
+    try {
+      const controls = await scanService.startCameraScan(video, (rawValue) => {
+        detected = true;
+        void handleCameraBarcode(rawValue);
+      });
+      cameraControlsRef.current = controls;
+      if (!detected) setLoading('Point camera at the UPC barcode...');
+    } catch {
+      cameraControlsRef.current = null;
+      setCameraActive(false);
       setLoading('');
-      setError(matches.length ? 'Review possible matches before estimating value.' : 'No matches found. Add more details.');
+      setError('Could not start the camera scanner. Check camera permission or upload a photo instead.');
     }
+  }
+
+  async function handleCameraBarcode(rawValue: string) {
+    cameraControlsRef.current?.stop();
+    cameraControlsRef.current = null;
+    setCameraActive(false);
+    setLoading('Barcode found. Matching Pop...');
+
+    await identifyAndLookup(
+      scanService.buildBarcodeScan(rawValue, 'camera'),
+      0.65,
+      'Barcode read, but match confidence is low. Select the best possible match or refine manual details.',
+      'Barcode read, but no catalog match was found. Try manual details.'
+    );
+  }
+
+  function stopCameraScan() {
+    cameraControlsRef.current?.stop();
+    cameraControlsRef.current = null;
+    setCameraActive(false);
+    setLoading((current) => (current === 'Point camera at the UPC barcode...' ? '' : current));
   }
 
   async function lookupItem(item: FunkoItem) {
@@ -202,10 +263,22 @@ function App() {
             ) : (
               <div>
                 <strong>Open camera or upload photo</strong>
-                <span>Barcode detection uses the browser when available.</span>
+                <span>Reads UPC/EAN barcodes from camera-captured or uploaded images.</span>
               </div>
             )}
           </label>
+          <video
+            aria-hidden={!cameraActive}
+            className={`camera-preview ${cameraActive ? 'active' : ''}`}
+            muted
+            playsInline
+            ref={videoRef}
+          />
+          <div className="scan-actions">
+            <button className="secondary-button" onClick={cameraActive ? stopCameraScan : startCameraScan} type="button">
+              {cameraActive ? 'Stop Camera' : 'Scan Barcode'}
+            </button>
+          </div>
 
           <form className="manual-form" onSubmit={handleManualSubmit}>
             <div className="field-row">

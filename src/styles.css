@@ -208,6 +208,27 @@ label {
   color: #a1a1aa;
 }
 
+.camera-preview {
+  display: none;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  margin-top: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background: #050505;
+  object-fit: cover;
+}
+
+.camera-preview.active {
+  display: block;
+}
+
+.scan-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
 .manual-form {
   display: grid;
   gap: 12px;
