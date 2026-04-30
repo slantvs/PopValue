@@ -38,6 +38,14 @@ Local URLs:
 
 The app falls back to mock data when eBay credentials are not configured.
 
+## Public Demo
+
+GitHub Pages publishes the static frontend here:
+
+https://slantvs.github.io/FunkScan/
+
+That demo can load the app UI and mock fallback data. Live eBay lookups still need a hosted Node API with private server-side environment variables.
+
 ## Scripts
 
 - `npm run dev` starts the Vite app and Express API.

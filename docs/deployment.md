@@ -53,4 +53,10 @@ Backend:
 
 ## Static Demo Only
 
-GitHub Pages can serve the built frontend, but live eBay lookups will not work without a hosted API. This is fine for a mock-data demo, but not for the full product.
+GitHub Pages serves the built frontend at:
+
+```text
+https://slantvs.github.io/FunkScan/
+```
+
+The Pages workflow builds with `GITHUB_PAGES=true`, which makes Vite emit asset paths under `/FunkScan/`. Live eBay lookups will not work on Pages without a hosted API. This is fine for a mock-data demo, but not for the full product.
