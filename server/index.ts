@@ -114,7 +114,18 @@ async function searchActiveListings(options: EbaySearchOptions): Promise<EbayLis
     options.token
   );
 
-  return (payload.itemSummaries ?? []).map((item) => mapActiveItem(item));
+  let items = payload.itemSummaries ?? [];
+  if (!items.length && options.upc && options.query) {
+    const fallbackParams = buildSearchParams(options, true);
+    fallbackParams.set('filter', 'buyingOptions:{FIXED_PRICE|AUCTION}');
+    const fallbackPayload = await ebayGet<EbaySearchResponse>(
+      `${apiBase}/buy/browse/v1/item_summary/search?${fallbackParams.toString()}`,
+      options.token
+    );
+    items = fallbackPayload.itemSummaries ?? [];
+  }
+
+  return items.map((item) => mapActiveItem(item));
 }
 
 async function searchSoldListings(options: EbaySearchOptions): Promise<EbayListing[]> {
@@ -126,15 +137,25 @@ async function searchSoldListings(options: EbaySearchOptions): Promise<EbayListi
     options.token
   );
 
-  return (payload.itemSales ?? []).map((item) => mapSoldItem(item));
+  let items = payload.itemSales ?? [];
+  if (!items.length && options.upc && options.query) {
+    const fallbackParams = buildSearchParams(options, true);
+    const fallbackPayload = await ebayGet<EbaySalesResponse>(
+      `${apiBase}/buy/marketplace_insights/v1_beta/item_sales/search?${fallbackParams.toString()}`,
+      options.token
+    );
+    items = fallbackPayload.itemSales ?? [];
+  }
+
+  return items.map((item) => mapSoldItem(item));
 }
 
-function buildSearchParams({ upc, query, limit }: EbaySearchOptions) {
+function buildSearchParams({ upc, query, limit }: EbaySearchOptions, preferQuery = false) {
   const searchParams = new URLSearchParams({
     limit: String(Math.min(Math.max(limit, 1), 100))
   });
 
-  if (upc) {
+  if (upc && !preferQuery) {
     searchParams.set('gtin', upc);
   } else if (query) {
     searchParams.set('q', query);
