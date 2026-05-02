@@ -44,6 +44,7 @@ function App() {
   const [collection, setCollection] = useState<CollectionEntry[]>(() => collectionService.list());
   const [profileUser, setProfileUser] = useState<ProfileUser | null>(null);
   const [authEmail, setAuthEmail] = useState('');
+  const [authError, setAuthError] = useState('');
   const [authMessage, setAuthMessage] = useState('');
   const [authLoading, setAuthLoading] = useState('');
   const [localCollectionCount, setLocalCollectionCount] = useState(() => collectionService.list().length);
@@ -95,7 +96,7 @@ function App() {
         setAuthMessage(entries.length ? 'Profile collection loaded.' : 'Profile ready. Saved Pops will sync here.');
       })
       .catch(() => {
-        if (active) setError('Could not load your profile collection. Local collection is still available if you sign out.');
+        if (active) setAuthError('Could not load your profile collection. Local collection is still available if you sign out.');
       })
       .finally(() => {
         if (active) setAuthLoading('');
@@ -353,14 +354,15 @@ function App() {
     if (!email) return;
 
     setAuthLoading('Sending login link...');
+    setAuthError('');
     setAuthMessage('');
-    setError('');
 
     try {
       await authService.sendMagicLink(email);
       setAuthMessage('Check your email for the PopValue login link.');
-    } catch {
-      setError('Could not send the login link. Check your Supabase Auth settings and try again.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Check your Supabase Auth settings and try again.';
+      setAuthError(`Could not send the login link. ${message}`);
     } finally {
       setAuthLoading('');
     }
@@ -368,13 +370,15 @@ function App() {
 
   async function signOutProfile() {
     setAuthLoading('Signing out...');
+    setAuthError('');
     setAuthMessage('');
 
     try {
       await authService.signOut();
       setProfileUser(null);
-    } catch {
-      setError('Could not sign out. Try again.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Try again.';
+      setAuthError(`Could not sign out. ${message}`);
     } finally {
       setAuthLoading('');
     }
@@ -386,6 +390,7 @@ function App() {
     if (!localEntries.length) return;
 
     setAuthLoading('Moving local collection to profile...');
+    setAuthError('');
     setAuthMessage('');
 
     try {
@@ -393,8 +398,9 @@ function App() {
       collectionService.replace([]);
       setLocalCollectionCount(0);
       setAuthMessage('Local collection moved to your profile.');
-    } catch {
-      setError('Could not move the local collection into your profile.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Try again.';
+      setAuthError(`Could not move the local collection into your profile. ${message}`);
     } finally {
       setAuthLoading('');
     }
@@ -546,6 +552,7 @@ function App() {
         />
         <CollectionPanel
           authEmail={authEmail}
+          authError={authError}
           authLoading={authLoading}
           authMessage={authMessage}
           collection={collection}
@@ -746,6 +753,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 function ProfileCard({
   authEmail,
+  authError,
   authLoading,
   authMessage,
   isAuthConfigured,
@@ -757,6 +765,7 @@ function ProfileCard({
   profileUser
 }: {
   authEmail: string;
+  authError: string;
   authLoading: string;
   authMessage: string;
   isAuthConfigured: boolean;
@@ -813,6 +822,7 @@ function ProfileCard({
         </form>
       )}
 
+      {authError && <small className="profile-error">{authError}</small>}
       {(authLoading || authMessage) && <small>{authLoading || authMessage}</small>}
     </div>
   );
@@ -820,6 +830,7 @@ function ProfileCard({
 
 function CollectionPanel({
   authEmail,
+  authError,
   authLoading,
   authMessage,
   collection,
@@ -837,6 +848,7 @@ function CollectionPanel({
   total
 }: {
   authEmail: string;
+  authError: string;
   authLoading: string;
   authMessage: string;
   collection: CollectionEntry[];
@@ -865,6 +877,7 @@ function CollectionPanel({
 
       <ProfileCard
         authEmail={authEmail}
+        authError={authError}
         authLoading={authLoading}
         authMessage={authMessage}
         isAuthConfigured={isAuthConfigured}

@@ -563,6 +563,10 @@ textarea:focus {
   color: #a1a1aa;
 }
 
+.profile-card .profile-error {
+  color: #fecaca;
+}
+
 .profile-card p {
   margin: 0;
 }
