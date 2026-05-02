@@ -11,6 +11,12 @@ Because the API needs private eBay credentials, do not deploy it as client-side 
 
 Use Vercel for the Vite frontend and `/api` serverless functions, or use a platform that can run a Node server and serve static assets, such as Render, Railway, or Fly.io.
 
+Current Vercel deployment:
+
+```text
+https://popvalue.vercel.app
+```
+
 Set these environment variables in the host dashboard:
 
 - `EBAY_CLIENT_ID`
@@ -62,4 +68,4 @@ GitHub Pages serves the built frontend at:
 https://slantvs.github.io/PopValue/
 ```
 
-The Pages workflow builds with `GITHUB_PAGES=true`, which makes Vite emit asset paths under `/PopValue/`. Live eBay lookups will not work on Pages without a hosted API. This is fine for a mock-data demo, but not for the full product.
+The Pages workflow builds with `GITHUB_PAGES=true`, which makes Vite emit asset paths under `/PopValue/`. It also sets `VITE_API_BASE_URL=https://popvalue.vercel.app`, so the static frontend can call the hosted API. Real eBay data still requires valid server-side eBay credentials on the API host.

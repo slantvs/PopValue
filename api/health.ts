@@ -1,4 +1,4 @@
-import { jsonResponse, optionsResponse } from '../server/http';
+import { jsonResponse, optionsResponse } from '../server/http.js';
 
 export default {
   fetch(request: Request) {

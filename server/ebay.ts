@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
-import { mockEbayListings, mockSoldListings } from '../src/data/mockData';
-import type { EbayListing, EbayLookupResult } from '../src/types';
+import { mockEbayListings, mockSoldListings } from '../src/data/mockData.js';
+import type { EbayListing, EbayLookupResult } from '../src/types.js';
 
 dotenv.config();
 

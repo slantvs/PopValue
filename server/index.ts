@@ -2,7 +2,7 @@ import cors from 'cors';
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { searchEbayMarket } from './ebay';
+import { searchEbayMarket } from './ebay.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? 8787);

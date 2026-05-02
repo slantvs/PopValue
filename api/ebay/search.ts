@@ -1,5 +1,5 @@
-import { searchEbayMarket, type EbaySearchRequest } from '../../server/ebay';
-import { jsonResponse, optionsResponse } from '../../server/http';
+import { searchEbayMarket, type EbaySearchRequest } from '../../server/ebay.js';
+import { jsonResponse, optionsResponse } from '../../server/http.js';
 
 export default {
   async fetch(request: Request) {

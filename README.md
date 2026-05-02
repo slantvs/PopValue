@@ -52,11 +52,15 @@ The app falls back to mock data when eBay credentials are not configured.
 
 ## Public Demo
 
+Full-stack Vercel deployment:
+
+https://popvalue.vercel.app
+
 GitHub Pages publishes the static frontend here:
 
 https://slantvs.github.io/PopValue/
 
-That demo can load the app UI and mock fallback data. Live eBay lookups still need a hosted Node API with private server-side environment variables.
+The GitHub Pages build points at the Vercel API through `VITE_API_BASE_URL`.
 
 ## Scripts
 
