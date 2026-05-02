@@ -86,7 +86,7 @@ function App() {
         {
           item: provisionalItem,
           score: 0.5,
-          reasons: ['Barcode lookup']
+          reasons: [provisionalItem.upc ? 'Barcode lookup' : 'Manual marketplace lookup']
         },
         ...matches
       ]);

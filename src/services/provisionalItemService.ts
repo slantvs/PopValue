@@ -4,16 +4,30 @@ const placeholderImageUrl = 'https://placehold.co/600x800/111827/f8fafc?text=Fun
 
 export function buildProvisionalFunkoItem(rawValue: string | undefined, manual: ManualSearchFields): FunkoItem | null {
   const upc = rawValue?.match(/\d{8,14}/)?.[0];
-  if (!upc) return null;
+  const name = manual.name.trim();
+  const franchise = manual.franchise.trim();
+  const series = manual.series.trim();
+  const boxNumber = manual.boxNumber.trim();
+  const variant = manual.variant.trim();
+  const hasManualDetail = [name, franchise, series, boxNumber, variant].some(Boolean);
+
+  if (!upc && !hasManualDetail) return null;
+
+  const idSeed = [upc, name, franchise, series, boxNumber, variant]
+    .filter(Boolean)
+    .join('-')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
 
   return {
-    id: `barcode-${upc}`,
-    upc,
-    name: manual.name.trim() || 'Funko Pop',
-    franchise: manual.franchise.trim() || 'Unknown Franchise',
-    series: manual.series.trim() || 'Unknown Series',
-    boxNumber: manual.boxNumber.trim() || undefined,
-    variant: manual.variant.trim() || undefined,
+    id: upc ? `barcode-${upc}` : `manual-${idSeed}`,
+    upc: upc || undefined,
+    name: name || 'Funko Pop',
+    franchise: franchise || 'Unknown Franchise',
+    series: series || 'Unknown Series',
+    boxNumber: boxNumber || undefined,
+    variant: variant || undefined,
     condition: 'mint',
     imageUrl: placeholderImageUrl
   };

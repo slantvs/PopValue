@@ -45,4 +45,22 @@ describe('buildProvisionalFunkoItem', () => {
   it('returns null when no barcode-like digits exist', () => {
     expect(buildProvisionalFunkoItem('not a barcode', emptyManual)).toBeNull();
   });
+
+  it('builds a marketplace-searchable item from manual details without a barcode', () => {
+    const item = buildProvisionalFunkoItem('Orihime Inoue Bleach #1611', {
+      ...emptyManual,
+      name: 'Orihime Inoue',
+      franchise: 'Bleach',
+      boxNumber: '1611'
+    });
+
+    expect(item).toMatchObject({
+      id: 'manual-orihime-inoue-bleach-1611',
+      upc: undefined,
+      name: 'Orihime Inoue',
+      franchise: 'Bleach',
+      series: 'Unknown Series',
+      boxNumber: '1611'
+    });
+  });
 });
