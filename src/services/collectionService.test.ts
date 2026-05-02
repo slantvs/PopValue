@@ -83,4 +83,16 @@ describe('CollectionService', () => {
     expect(imported[0].id).toBe('entry-2');
     expect(imported[0].valuation.medianPrice).toBe(50);
   });
+
+  it('removes a saved entry by id', () => {
+    const service = new CollectionService();
+    service.save(entry({ id: 'entry-1' }));
+    service.save(entry({ id: 'entry-2' }));
+
+    const next = service.remove('entry-1');
+
+    expect(next).toHaveLength(1);
+    expect(next[0].id).toBe('entry-2');
+    expect(service.list()).toHaveLength(1);
+  });
 });

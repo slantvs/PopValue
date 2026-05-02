@@ -40,6 +40,12 @@ export class CollectionService {
     return next;
   }
 
+  remove(id: string) {
+    const next = this.list().filter((entry) => entry.id !== id);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    return next;
+  }
+
   totalEstimatedValue(entries: CollectionEntry[]) {
     return entries.reduce((total, entry) => total + entry.valuation.medianPrice, 0);
   }

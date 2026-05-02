@@ -237,6 +237,12 @@ function App() {
     setCollection(collectionService.update(id, patch));
   }
 
+  function removeCollectionEntry(entry: CollectionEntry) {
+    const label = `${entry.item.name}${entry.item.boxNumber ? ` #${entry.item.boxNumber}` : ''}`;
+    if (!window.confirm(`Remove ${label} from your collection?`)) return;
+    setCollection(collectionService.remove(entry.id));
+  }
+
   function exportCollection() {
     const blob = new Blob([collectionService.exportJson(collection)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -405,6 +411,7 @@ function App() {
           collection={collection}
           onExport={exportCollection}
           onImport={importCollection}
+          onRemove={removeCollectionEntry}
           onUpdate={updateCollectionEntry}
           total={totalCollectionValue}
         />
@@ -594,12 +601,14 @@ function CollectionPanel({
   collection,
   onExport,
   onImport,
+  onRemove,
   onUpdate,
   total
 }: {
   collection: CollectionEntry[];
   onExport: () => void;
   onImport: (file: File) => void;
+  onRemove: (entry: CollectionEntry) => void;
   onUpdate: (id: string, patch: Partial<CollectionEntry>) => void;
   total: number;
 }) {
@@ -636,9 +645,19 @@ function CollectionPanel({
             <article className="collection-card" key={entry.id}>
               <img src={entry.item.imageUrl} alt={entry.item.name} />
               <div>
-                <h3>
-                  {entry.item.name} {entry.item.boxNumber ? `#${entry.item.boxNumber}` : ''}
-                </h3>
+                <div className="collection-card-header">
+                  <h3>
+                    {entry.item.name} {entry.item.boxNumber ? `#${entry.item.boxNumber}` : ''}
+                  </h3>
+                  <button
+                    aria-label={`Remove ${entry.item.name} from collection`}
+                    className="remove-button"
+                    onClick={() => onRemove(entry)}
+                    type="button"
+                  >
+                    Remove
+                  </button>
+                </div>
                 <p>{formatCurrency(entry.valuation.medianPrice)} estimated median</p>
                 <select
                   value={entry.condition}

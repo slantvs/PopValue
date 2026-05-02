@@ -527,6 +527,33 @@ textarea:focus {
   align-items: start;
 }
 
+.collection-card-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: start;
+}
+
+.collection-card-header h3 {
+  margin-bottom: 0;
+}
+
+.remove-button {
+  border: 1px solid rgba(239, 68, 68, 0.34);
+  border-radius: 999px;
+  background: rgba(127, 29, 29, 0.24);
+  color: #fecaca;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 7px 10px;
+}
+
+.remove-button:hover {
+  border-color: rgba(248, 113, 113, 0.7);
+  background: rgba(153, 27, 27, 0.34);
+}
+
 .collection-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
