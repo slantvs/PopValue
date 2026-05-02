@@ -1119,6 +1119,19 @@ function CollectionPanel({
   profileUser: ProfileUser | null;
   total: number;
 }) {
+  const [isCollectionOpen, setCollectionOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isCollectionOpen) return undefined;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setCollectionOpen(false);
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isCollectionOpen]);
+
   return (
     <section className="panel collection-panel">
       <div className="panel-heading">
@@ -1162,6 +1175,9 @@ function CollectionPanel({
       />
 
       <div className="collection-actions">
+        <button className="primary-button" disabled={!collection.length} onClick={() => setCollectionOpen(true)} type="button">
+          View Collection
+        </button>
         <button className="secondary-button" disabled={!collection.length} onClick={onExport} type="button">
           Export
         </button>
@@ -1179,7 +1195,63 @@ function CollectionPanel({
       </div>
 
       {collection.length ? (
-        <div className="collection-grid">
+        <div className="collection-summary">
+          <strong>{collection.length} saved Pops</strong>
+          <span>Open the collection popup to edit condition, notes, or remove items.</span>
+        </div>
+      ) : (
+        <EmptyState title="Collection is empty" body="Save estimated Pops here to track total collection value." />
+      )}
+
+      {isCollectionOpen && (
+        <CollectionModal
+          collection={collection}
+          onClose={() => setCollectionOpen(false)}
+          onRemove={onRemove}
+          onUpdate={onUpdate}
+          total={total}
+        />
+      )}
+    </section>
+  );
+}
+
+function CollectionModal({
+  collection,
+  onClose,
+  onRemove,
+  onUpdate,
+  total
+}: {
+  collection: CollectionEntry[];
+  onClose: () => void;
+  onRemove: (entry: CollectionEntry) => void;
+  onUpdate: (id: string, patch: Partial<CollectionEntry>) => void;
+  total: number;
+}) {
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section
+        aria-labelledby="collection-modal-title"
+        aria-modal="true"
+        className="collection-modal"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+      >
+        <div className="modal-heading">
+          <div>
+            <p className="eyebrow">My Collection</p>
+            <h2 id="collection-modal-title">{formatCurrency(total)}</h2>
+            <small>
+              {collection.length} saved Pop{collection.length === 1 ? '' : 's'}
+            </small>
+          </div>
+          <button className="secondary-button compact" onClick={onClose} type="button">
+            Close
+          </button>
+        </div>
+
+        <div className="collection-grid modal-collection-grid">
           {collection.map((entry) => (
             <article className="collection-card" key={entry.id}>
               <img src={entry.item.imageUrl} alt={entry.item.name} />
@@ -1216,10 +1288,8 @@ function CollectionPanel({
             </article>
           ))}
         </div>
-      ) : (
-        <EmptyState title="Collection is empty" body="Save estimated Pops here to track total collection value." />
-      )}
-    </section>
+      </section>
+    </div>
   );
 }
 
