@@ -12,6 +12,7 @@ import type {
 import { collectionService } from './services/collectionService';
 import { ebayService } from './services/ebayService';
 import { identifyService } from './services/identifyService';
+import { buildProvisionalFunkoItem } from './services/provisionalItemService';
 import { retailService } from './services/retailService';
 import { scanService } from './services/scanService';
 import type { CameraScannerControls } from './services/scanService';
@@ -76,6 +77,20 @@ function App() {
 
     if (matches[0]?.score >= minimumScore) {
       await lookupItem(matches[0].item);
+      return;
+    }
+
+    const provisionalItem = buildProvisionalFunkoItem(scan.rawValue, manual);
+    if (provisionalItem) {
+      setCandidates([
+        {
+          item: provisionalItem,
+          score: 0.5,
+          reasons: ['Barcode lookup']
+        },
+        ...matches
+      ]);
+      await lookupItem(provisionalItem);
       return;
     }
 

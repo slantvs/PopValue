@@ -2,6 +2,8 @@ import { mockEbayListings, mockSoldListings } from '../data/mockData';
 import type { EbayListing, EbayLookupResult, FunkoItem } from '../types';
 import { identifyService } from './identifyService';
 
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+
 export class EbayService {
   async searchListings(item: FunkoItem): Promise<EbayLookupResult> {
     const query = identifyService.buildSearchQuery(
@@ -10,7 +12,7 @@ export class EbayService {
     );
 
     try {
-      const response = await fetch('/api/ebay/search', {
+      const response = await fetch(`${apiBaseUrl}/api/ebay/search`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ upc: item.upc, query, limit: 40 })

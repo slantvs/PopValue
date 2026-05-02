@@ -9,7 +9,7 @@ Because the API needs private eBay credentials, do not deploy it as client-side 
 
 ## Recommended: Full-stack Host
 
-Use a platform that can run a Node server and serve static assets, such as Render, Railway, or Fly.io.
+Use Vercel for the Vite frontend and `/api` serverless functions, or use a platform that can run a Node server and serve static assets, such as Render, Railway, or Fly.io.
 
 Set these environment variables in the host dashboard:
 
@@ -35,7 +35,7 @@ Start command:
 NODE_ENV=production npm start
 ```
 
-In production mode, the Express server serves the built `dist` directory and keeps `/api/*` routes available from the same origin.
+In production mode, the Express server serves the built `dist` directory and keeps `/api/*` routes available from the same origin. On Vercel, the `api/` directory provides equivalent serverless routes.
 
 ## Split Deployment
 
@@ -46,6 +46,7 @@ Frontend:
 - Build with `npm run build`.
 - Publish `dist`.
 - Configure the frontend to call the hosted API URL instead of relying on the Vite dev proxy.
+- Set `VITE_API_BASE_URL` to the hosted API origin before building.
 
 Backend:
 

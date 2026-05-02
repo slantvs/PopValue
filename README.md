@@ -79,14 +79,16 @@ Server-only environment variables live in `.env`:
 - `EBAY_API_BASE_URL` defaults to `https://api.ebay.com`; use `https://api.sandbox.ebay.com` with `SBX` sandbox credentials.
 - `EBAY_ENABLE_SOLD_LOOKUP` should only be enabled after Marketplace Insights access is approved.
 - `PORT` defaults to `8787`.
+- `VITE_API_BASE_URL` points the browser app at a hosted API when the frontend is deployed separately.
 
 Do not prefix secrets with `VITE_`; that would expose them to the browser bundle.
 Do not commit `.env`, screenshots of credentials, or eBay Cert IDs. If a Client Secret/Cert ID is shared publicly, rotate it in the eBay developer portal before using it.
 
 ## Deployment
 
-GitHub Pages can host the frontend only, but this project also needs the Express API for live eBay lookups. Recommended path:
+GitHub Pages can host the frontend only, but this project also needs an API host for live eBay lookups. Recommended path:
 
+- Vercel for the Vite frontend and `/api` serverless functions.
 - Render, Railway, or Fly.io for a full-stack Node deployment.
 - Static frontend on Netlify or GitHub Pages plus the Express API on Render, Railway, or Fly.io.
 - Mock-only static demo if live marketplace lookups are not needed.
