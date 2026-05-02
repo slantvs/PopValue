@@ -102,6 +102,8 @@ VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-public-anon-key
 ```
 
+Use the base Supabase project URL only. Do not use the Data API REST endpoint ending in `/rest/v1`.
+
 In Supabase Auth settings, set the site URL to `https://popvalue.vercel.app` and add that same URL as an allowed redirect URL.
 
 ## Deployment

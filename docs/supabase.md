@@ -38,6 +38,7 @@ VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-public-anon-key
 ```
 
+Use the base project URL only. Do not use the Data API REST endpoint ending in `/rest/v1`.
 Use the public anon key only. Do not use the service role key in PopValue frontend environment variables.
 
 ## 5. Redeploy
