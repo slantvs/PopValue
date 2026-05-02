@@ -282,6 +282,13 @@ textarea:focus {
   cursor: pointer;
 }
 
+.primary-button.compact,
+.secondary-button.compact {
+  border-radius: 999px;
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+
 .primary-button {
   color: #fff;
   background: linear-gradient(135deg, #ef4444, #991b1b);
@@ -525,6 +532,45 @@ textarea:focus {
 .collection-card {
   grid-template-columns: 92px 1fr;
   align-items: start;
+}
+
+.profile-card {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  background: #050505;
+  padding: 12px;
+}
+
+.profile-card-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.profile-card-header strong,
+.profile-card-header span,
+.profile-card small {
+  display: block;
+}
+
+.profile-card-header span,
+.profile-card p,
+.profile-card small {
+  color: #a1a1aa;
+}
+
+.profile-card p {
+  margin: 0;
+}
+
+.profile-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
 }
 
 .collection-card-header {

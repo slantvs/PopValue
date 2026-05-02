@@ -5,11 +5,15 @@ import type {
   FunkoItem,
   IdentificationCandidate,
   ManualSearchFields,
+  ProfileUser,
   RetailOffer,
   ScanResult,
   ValuationResult
 } from './types';
+import { authService } from './services/authService';
+import { cloudCollectionService } from './services/cloudCollectionService';
 import { collectionService } from './services/collectionService';
+import { parseCollectionExport } from './services/collectionService';
 import { ebayService } from './services/ebayService';
 import { identifyService } from './services/identifyService';
 import { enrichItemImageFromListings } from './services/itemImageService';
@@ -38,6 +42,11 @@ function App() {
   const [valuation, setValuation] = useState<ValuationResult | null>(null);
   const [retailOffers, setRetailOffers] = useState<RetailOffer[]>([]);
   const [collection, setCollection] = useState<CollectionEntry[]>(() => collectionService.list());
+  const [profileUser, setProfileUser] = useState<ProfileUser | null>(null);
+  const [authEmail, setAuthEmail] = useState('');
+  const [authMessage, setAuthMessage] = useState('');
+  const [authLoading, setAuthLoading] = useState('');
+  const [localCollectionCount, setLocalCollectionCount] = useState(() => collectionService.list().length);
   const [notes, setNotes] = useState('');
   const [purchasePrice, setPurchasePrice] = useState('');
   const [condition, setCondition] = useState<Condition>('mint');
@@ -57,6 +66,45 @@ function App() {
       if (imagePreviewRef.current) URL.revokeObjectURL(imagePreviewRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!authService.configured) return undefined;
+
+    void authService.currentUser().then(setProfileUser);
+    return authService.onAuthChange(setProfileUser);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!profileUser) {
+      setCollection(collectionService.list());
+      setLocalCollectionCount(collectionService.list().length);
+      return () => {
+        active = false;
+      };
+    }
+
+    setAuthLoading('Loading profile collection...');
+    cloudCollectionService
+      .list(profileUser.id)
+      .then((entries) => {
+        if (!active) return;
+        setCollection(entries);
+        setLocalCollectionCount(collectionService.list().length);
+        setAuthMessage(entries.length ? 'Profile collection loaded.' : 'Profile ready. Saved Pops will sync here.');
+      })
+      .catch(() => {
+        if (active) setError('Could not load your profile collection. Local collection is still available if you sign out.');
+      })
+      .finally(() => {
+        if (active) setAuthLoading('');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [profileUser]);
 
   function applyScanResult(scan: ScanResult) {
     if (imagePreviewRef.current && imagePreviewRef.current !== scan.imagePreview) {
@@ -215,7 +263,7 @@ function App() {
     }
   }
 
-  function saveToCollection() {
+  async function saveToCollection() {
     if (!selectedItem || !valuation) return;
 
     const entry: CollectionEntry = {
@@ -228,19 +276,49 @@ function App() {
       savedAt: new Date().toISOString()
     };
 
-    setCollection(collectionService.save(entry));
+    try {
+      if (profileUser) {
+        setCollection(await cloudCollectionService.save(profileUser.id, entry));
+        setAuthMessage('Saved to your profile.');
+      } else {
+        setCollection(collectionService.save(entry));
+        setLocalCollectionCount(collectionService.list().length);
+      }
+    } catch {
+      setError('Could not save that Pop to your profile. Try again.');
+    }
+
     setNotes('');
     setPurchasePrice('');
   }
 
-  function updateCollectionEntry(id: string, patch: Partial<CollectionEntry>) {
-    setCollection(collectionService.update(id, patch));
+  async function updateCollectionEntry(id: string, patch: Partial<CollectionEntry>) {
+    try {
+      if (profileUser) {
+        setCollection(await cloudCollectionService.update(profileUser.id, id, patch));
+      } else {
+        setCollection(collectionService.update(id, patch));
+        setLocalCollectionCount(collectionService.list().length);
+      }
+    } catch {
+      setError('Could not update that collection entry.');
+    }
   }
 
-  function removeCollectionEntry(entry: CollectionEntry) {
+  async function removeCollectionEntry(entry: CollectionEntry) {
     const label = `${entry.item.name}${entry.item.boxNumber ? ` #${entry.item.boxNumber}` : ''}`;
     if (!window.confirm(`Remove ${label} from your collection?`)) return;
-    setCollection(collectionService.remove(entry.id));
+
+    try {
+      if (profileUser) {
+        setCollection(await cloudCollectionService.remove(profileUser.id, entry.id));
+      } else {
+        setCollection(collectionService.remove(entry.id));
+        setLocalCollectionCount(collectionService.list().length);
+      }
+    } catch {
+      setError('Could not remove that collection entry.');
+    }
   }
 
   function exportCollection() {
@@ -256,10 +334,69 @@ function App() {
   async function importCollection(file: File) {
     try {
       const contents = await file.text();
-      setCollection(collectionService.importJson(contents));
+      if (profileUser) {
+        setCollection(await cloudCollectionService.replace(profileUser.id, parseCollectionExport(contents)));
+        setAuthMessage('Imported collection into your profile.');
+      } else {
+        setCollection(collectionService.importJson(contents));
+        setLocalCollectionCount(collectionService.list().length);
+      }
       setError('');
     } catch {
       setError('Could not import that collection file.');
+    }
+  }
+
+  async function sendSignInLink(event: FormEvent) {
+    event.preventDefault();
+    const email = authEmail.trim();
+    if (!email) return;
+
+    setAuthLoading('Sending login link...');
+    setAuthMessage('');
+    setError('');
+
+    try {
+      await authService.sendMagicLink(email);
+      setAuthMessage('Check your email for the PopValue login link.');
+    } catch {
+      setError('Could not send the login link. Check your Supabase Auth settings and try again.');
+    } finally {
+      setAuthLoading('');
+    }
+  }
+
+  async function signOutProfile() {
+    setAuthLoading('Signing out...');
+    setAuthMessage('');
+
+    try {
+      await authService.signOut();
+      setProfileUser(null);
+    } catch {
+      setError('Could not sign out. Try again.');
+    } finally {
+      setAuthLoading('');
+    }
+  }
+
+  async function moveLocalCollectionToProfile() {
+    if (!profileUser) return;
+    const localEntries = collectionService.list();
+    if (!localEntries.length) return;
+
+    setAuthLoading('Moving local collection to profile...');
+    setAuthMessage('');
+
+    try {
+      setCollection(await cloudCollectionService.merge(profileUser.id, localEntries));
+      collectionService.replace([]);
+      setLocalCollectionCount(0);
+      setAuthMessage('Local collection moved to your profile.');
+    } catch {
+      setError('Could not move the local collection into your profile.');
+    } finally {
+      setAuthLoading('');
     }
   }
 
@@ -408,11 +545,21 @@ function App() {
           valuation={valuation}
         />
         <CollectionPanel
+          authEmail={authEmail}
+          authLoading={authLoading}
+          authMessage={authMessage}
           collection={collection}
+          isAuthConfigured={authService.configured}
+          localCollectionCount={localCollectionCount}
+          onAuthEmailChange={setAuthEmail}
           onExport={exportCollection}
           onImport={importCollection}
+          onMoveLocalCollection={moveLocalCollectionToProfile}
           onRemove={removeCollectionEntry}
+          onSignIn={sendSignInLink}
+          onSignOut={signOutProfile}
           onUpdate={updateCollectionEntry}
+          profileUser={profileUser}
           total={totalCollectionValue}
         />
       </section>
@@ -597,19 +744,113 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
+function ProfileCard({
+  authEmail,
+  authLoading,
+  authMessage,
+  isAuthConfigured,
+  localCollectionCount,
+  onAuthEmailChange,
+  onMoveLocalCollection,
+  onSignIn,
+  onSignOut,
+  profileUser
+}: {
+  authEmail: string;
+  authLoading: string;
+  authMessage: string;
+  isAuthConfigured: boolean;
+  localCollectionCount: number;
+  onAuthEmailChange: (email: string) => void;
+  onMoveLocalCollection: () => void;
+  onSignIn: (event: FormEvent) => void;
+  onSignOut: () => void;
+  profileUser: ProfileUser | null;
+}) {
+  return (
+    <div className="profile-card">
+      <div className="profile-card-header">
+        <div>
+          <strong>Profile</strong>
+          <span>{profileUser?.email ?? (isAuthConfigured ? 'Signed out' : 'Supabase setup needed')}</span>
+        </div>
+        {profileUser && (
+          <button className="secondary-button compact" disabled={Boolean(authLoading)} onClick={onSignOut} type="button">
+            Sign out
+          </button>
+        )}
+      </div>
+
+      {!isAuthConfigured ? (
+        <p>Add Supabase env vars to enable profile-synced collections.</p>
+      ) : profileUser ? (
+        <>
+          <p>Saved Pops sync to this profile across devices.</p>
+          {localCollectionCount > 0 && (
+            <button
+              className="secondary-button compact"
+              disabled={Boolean(authLoading)}
+              onClick={onMoveLocalCollection}
+              type="button"
+            >
+              Move {localCollectionCount} local save{localCollectionCount === 1 ? '' : 's'} to profile
+            </button>
+          )}
+        </>
+      ) : (
+        <form className="profile-form" onSubmit={onSignIn}>
+          <input
+            autoComplete="email"
+            inputMode="email"
+            onChange={(event) => onAuthEmailChange(event.target.value)}
+            placeholder="email@example.com"
+            type="email"
+            value={authEmail}
+          />
+          <button className="primary-button compact" disabled={Boolean(authLoading)} type="submit">
+            Send link
+          </button>
+        </form>
+      )}
+
+      {(authLoading || authMessage) && <small>{authLoading || authMessage}</small>}
+    </div>
+  );
+}
+
 function CollectionPanel({
+  authEmail,
+  authLoading,
+  authMessage,
   collection,
+  isAuthConfigured,
+  localCollectionCount,
+  onAuthEmailChange,
   onExport,
   onImport,
+  onMoveLocalCollection,
   onRemove,
+  onSignIn,
+  onSignOut,
   onUpdate,
+  profileUser,
   total
 }: {
+  authEmail: string;
+  authLoading: string;
+  authMessage: string;
   collection: CollectionEntry[];
+  isAuthConfigured: boolean;
+  localCollectionCount: number;
+  onAuthEmailChange: (email: string) => void;
   onExport: () => void;
   onImport: (file: File) => void;
+  onMoveLocalCollection: () => void;
   onRemove: (entry: CollectionEntry) => void;
+  onSignIn: (event: FormEvent) => void;
+  onSignOut: () => void;
   onUpdate: (id: string, patch: Partial<CollectionEntry>) => void;
+  profileUser: ProfileUser | null;
   total: number;
 }) {
   return (
@@ -621,6 +862,19 @@ function CollectionPanel({
         </div>
         <span className="pill">{collection.length} saved</span>
       </div>
+
+      <ProfileCard
+        authEmail={authEmail}
+        authLoading={authLoading}
+        authMessage={authMessage}
+        isAuthConfigured={isAuthConfigured}
+        localCollectionCount={localCollectionCount}
+        onAuthEmailChange={onAuthEmailChange}
+        onMoveLocalCollection={onMoveLocalCollection}
+        onSignIn={onSignIn}
+        onSignOut={onSignOut}
+        profileUser={profileUser}
+      />
 
       <div className="collection-actions">
         <button className="secondary-button" disabled={!collection.length} onClick={onExport} type="button">

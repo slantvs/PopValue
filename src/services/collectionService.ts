@@ -2,6 +2,13 @@ import type { CollectionEntry, Condition } from '../types';
 
 const STORAGE_KEY = 'popvalue.collection.v1';
 
+export function parseCollectionExport(contents: string) {
+  const parsed = JSON.parse(contents) as { entries?: CollectionEntry[] } | CollectionEntry[];
+  const entries = Array.isArray(parsed) ? parsed : parsed.entries;
+  if (!Array.isArray(entries)) throw new Error('Invalid collection export');
+  return entries;
+}
+
 export class CollectionService {
   list(): CollectionEntry[] {
     try {
@@ -55,10 +62,7 @@ export class CollectionService {
   }
 
   importJson(contents: string) {
-    const parsed = JSON.parse(contents) as { entries?: CollectionEntry[] } | CollectionEntry[];
-    const entries = Array.isArray(parsed) ? parsed : parsed.entries;
-    if (!Array.isArray(entries)) throw new Error('Invalid collection export');
-    return this.replace(entries);
+    return this.replace(parseCollectionExport(contents));
   }
 }
 

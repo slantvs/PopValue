@@ -1,6 +1,6 @@
 # PopValue
 
-PopValue is a React and Express MVP for estimating Funko Pop values. It can scan or upload a box image, match likely figures, compare eBay listings and retail references, and save collection entries in browser storage.
+PopValue is a React and Express MVP for estimating Funko Pop values. It can scan or upload a box image, match likely figures, compare eBay listings and retail references, and save collection entries in browser storage or a signed-in Supabase profile.
 
 ## Local Setup
 
@@ -50,6 +50,8 @@ Local URLs:
 
 The app falls back to mock data when eBay credentials are not configured.
 
+Signed-out collections are saved in browser storage. Profile-synced collections require Supabase setup.
+
 ## Public Demo
 
 Full-stack Vercel deployment:
@@ -84,9 +86,23 @@ Server-only environment variables live in `.env`:
 - `EBAY_ENABLE_SOLD_LOOKUP` should only be enabled after Marketplace Insights access is approved.
 - `PORT` defaults to `8787`.
 - `VITE_API_BASE_URL` points the browser app at a hosted API when the frontend is deployed separately.
+- `VITE_SUPABASE_URL` enables Supabase Auth and profile collections.
+- `VITE_SUPABASE_ANON_KEY` is the public Supabase anon key for browser-side auth and RLS-protected collection writes.
 
 Do not prefix secrets with `VITE_`; that would expose them to the browser bundle.
+The Supabase anon key is safe for browser use when Row Level Security is enabled. Never expose the Supabase service role key.
 Do not commit `.env`, screenshots of credentials, or eBay Cert IDs. If a Client Secret/Cert ID is shared publicly, rotate it in the eBay developer portal before using it.
+
+## Supabase Profiles
+
+Run [supabase/schema.sql](supabase/schema.sql) in the Supabase SQL Editor, then set these Vercel production env vars:
+
+```bash
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-public-anon-key
+```
+
+In Supabase Auth settings, set the site URL to `https://popvalue.vercel.app` and add that same URL as an allowed redirect URL.
 
 ## Deployment
 

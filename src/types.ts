@@ -92,3 +92,8 @@ export interface CollectionEntry {
   purchasePrice?: number;
   savedAt: string;
 }
+
+export interface ProfileUser {
+  id: string;
+  email?: string;
+}
