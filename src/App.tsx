@@ -512,6 +512,20 @@ function App() {
     void lookupPublicCollection();
   }
 
+  function clearPublicLookup() {
+    setProfileLookup('');
+    setPublicProfile(null);
+    setPublicCollection([]);
+    setPublicLookupError('');
+    setPublicLookupLoading('');
+
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('profile')) {
+      url.searchParams.delete('profile');
+      window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+    }
+  }
+
   return (
     <main className="app-shell">
       <section className="hero">
@@ -683,6 +697,7 @@ function App() {
           onProfileHandleChange={setProfileHandle}
           onProfilePublicChange={setProfilePublic}
           onPublicLookupChange={setProfileLookup}
+          onPublicLookupClear={clearPublicLookup}
           onPublicLookupSubmit={handlePublicLookupSubmit}
           onSavePublicProfile={savePublicProfile}
           onSignIn={sendSignInLink}
@@ -1003,6 +1018,7 @@ function ProfileCard({
 
 function PublicCollectionLookup({
   onPublicLookupChange,
+  onPublicLookupClear,
   onPublicLookupSubmit,
   publicCollection,
   publicCollectionValue,
@@ -1012,6 +1028,7 @@ function PublicCollectionLookup({
   publicProfile
 }: {
   onPublicLookupChange: (handle: string) => void;
+  onPublicLookupClear: () => void;
   onPublicLookupSubmit: (event: FormEvent) => void;
   publicCollection: CollectionEntry[];
   publicCollectionValue: number;
@@ -1020,6 +1037,10 @@ function PublicCollectionLookup({
   publicLookupLoading: string;
   publicProfile: PublicProfile | null;
 }) {
+  const hasLookupState = Boolean(
+    publicLookup || publicProfile || publicCollection.length || publicLookupError || publicLookupLoading
+  );
+
   return (
     <div className="profile-card public-lookup-card">
       <div className="profile-card-header">
@@ -1027,6 +1048,11 @@ function PublicCollectionLookup({
           <strong>Profile Lookup</strong>
           <span>View another public collection</span>
         </div>
+        {hasLookupState && (
+          <button className="secondary-button compact" onClick={onPublicLookupClear} type="button">
+            Clear
+          </button>
+        )}
       </div>
 
       <form className="profile-form" onSubmit={onPublicLookupSubmit}>
@@ -1091,6 +1117,7 @@ function CollectionPanel({
   onProfileHandleChange,
   onProfilePublicChange,
   onPublicLookupChange,
+  onPublicLookupClear,
   onPublicLookupSubmit,
   onSavePublicProfile,
   onSignIn,
@@ -1124,6 +1151,7 @@ function CollectionPanel({
   onProfileHandleChange: (handle: string) => void;
   onProfilePublicChange: (isPublic: boolean) => void;
   onPublicLookupChange: (handle: string) => void;
+  onPublicLookupClear: () => void;
   onPublicLookupSubmit: (event: FormEvent) => void;
   onSavePublicProfile: (event: FormEvent) => void;
   onSignIn: (event: FormEvent) => void;
@@ -1175,6 +1203,7 @@ function CollectionPanel({
 
       <PublicCollectionLookup
         onPublicLookupChange={onPublicLookupChange}
+        onPublicLookupClear={onPublicLookupClear}
         onPublicLookupSubmit={onPublicLookupSubmit}
         publicCollection={publicCollection}
         publicCollectionValue={publicCollectionValue}
