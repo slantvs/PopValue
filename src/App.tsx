@@ -60,6 +60,7 @@ function App() {
   const [notes, setNotes] = useState('');
   const [purchasePrice, setPurchasePrice] = useState('');
   const [condition, setCondition] = useState<Condition>('mint');
+  const [isCollectionOpen, setCollectionOpen] = useState(false);
   const [marketMessages, setMarketMessages] = useState<string[]>([]);
   const [loading, setLoading] = useState('');
   const [error, setError] = useState('');
@@ -83,6 +84,17 @@ function App() {
       if (imagePreviewRef.current) URL.revokeObjectURL(imagePreviewRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isCollectionOpen) return undefined;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setCollectionOpen(false);
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isCollectionOpen]);
 
   useEffect(() => {
     if (!authService.configured) return undefined;
@@ -631,19 +643,30 @@ function App() {
       </div>
 
       <section className="results-grid">
-        <ResultsPanel
-          condition={condition}
-          onConditionChange={setCondition}
-          onSave={saveToCollection}
-          purchasePrice={purchasePrice}
-          retailOffers={retailOffers}
-          selectedItem={selectedItem}
-          marketMessages={marketMessages}
-          setNotes={setNotes}
-          setPurchasePrice={setPurchasePrice}
-          notes={notes}
-          valuation={valuation}
-        />
+        <div className="results-stack">
+          <ResultsPanel
+            condition={condition}
+            onConditionChange={setCondition}
+            onSave={saveToCollection}
+            purchasePrice={purchasePrice}
+            retailOffers={retailOffers}
+            selectedItem={selectedItem}
+            marketMessages={marketMessages}
+            setNotes={setNotes}
+            setPurchasePrice={setPurchasePrice}
+            notes={notes}
+            valuation={valuation}
+          />
+          {isCollectionOpen && (
+            <CollectionModal
+              collection={collection}
+              onClose={() => setCollectionOpen(false)}
+              onRemove={removeCollectionEntry}
+              onUpdate={updateCollectionEntry}
+              total={totalCollectionValue}
+            />
+          )}
+        </div>
         <CollectionPanel
           authEmail={authEmail}
           authError={authError}
@@ -651,6 +674,7 @@ function App() {
           authMessage={authMessage}
           collection={collection}
           isAuthConfigured={authService.configured}
+          isCollectionOpen={isCollectionOpen}
           localCollectionCount={localCollectionCount}
           onAuthEmailChange={setAuthEmail}
           onExport={exportCollection}
@@ -660,11 +684,10 @@ function App() {
           onProfilePublicChange={setProfilePublic}
           onPublicLookupChange={setProfileLookup}
           onPublicLookupSubmit={handlePublicLookupSubmit}
-          onRemove={removeCollectionEntry}
           onSavePublicProfile={savePublicProfile}
           onSignIn={sendSignInLink}
           onSignOut={signOutProfile}
-          onUpdate={updateCollectionEntry}
+          onToggleCollection={() => setCollectionOpen((current) => !current)}
           profileDetails={profileDetails}
           profileHandle={profileHandle}
           profilePublic={profilePublic}
@@ -1059,6 +1082,7 @@ function CollectionPanel({
   authMessage,
   collection,
   isAuthConfigured,
+  isCollectionOpen,
   localCollectionCount,
   onAuthEmailChange,
   onExport,
@@ -1068,11 +1092,10 @@ function CollectionPanel({
   onProfilePublicChange,
   onPublicLookupChange,
   onPublicLookupSubmit,
-  onRemove,
   onSavePublicProfile,
   onSignIn,
   onSignOut,
-  onUpdate,
+  onToggleCollection,
   profileDetails,
   profileHandle,
   profilePublic,
@@ -1092,6 +1115,7 @@ function CollectionPanel({
   authMessage: string;
   collection: CollectionEntry[];
   isAuthConfigured: boolean;
+  isCollectionOpen: boolean;
   localCollectionCount: number;
   onAuthEmailChange: (email: string) => void;
   onExport: () => void;
@@ -1101,11 +1125,10 @@ function CollectionPanel({
   onProfilePublicChange: (isPublic: boolean) => void;
   onPublicLookupChange: (handle: string) => void;
   onPublicLookupSubmit: (event: FormEvent) => void;
-  onRemove: (entry: CollectionEntry) => void;
   onSavePublicProfile: (event: FormEvent) => void;
   onSignIn: (event: FormEvent) => void;
   onSignOut: () => void;
-  onUpdate: (id: string, patch: Partial<CollectionEntry>) => void;
+  onToggleCollection: () => void;
   profileDetails: PublicProfile | null;
   profileHandle: string;
   profilePublic: boolean;
@@ -1119,19 +1142,6 @@ function CollectionPanel({
   profileUser: ProfileUser | null;
   total: number;
 }) {
-  const [isCollectionOpen, setCollectionOpen] = useState(false);
-
-  useEffect(() => {
-    if (!isCollectionOpen) return undefined;
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setCollectionOpen(false);
-    }
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isCollectionOpen]);
-
   return (
     <section className="panel collection-panel">
       <div className="panel-heading">
@@ -1175,8 +1185,8 @@ function CollectionPanel({
       />
 
       <div className="collection-actions">
-        <button className="primary-button" disabled={!collection.length} onClick={() => setCollectionOpen(true)} type="button">
-          View Collection
+        <button className="primary-button" disabled={!collection.length} onClick={onToggleCollection} type="button">
+          {isCollectionOpen ? 'Hide Collection' : 'View Collection'}
         </button>
         <button className="secondary-button" disabled={!collection.length} onClick={onExport} type="button">
           Export
@@ -1202,16 +1212,6 @@ function CollectionPanel({
       ) : (
         <EmptyState title="Collection is empty" body="Save estimated Pops here to track total collection value." />
       )}
-
-      {isCollectionOpen && (
-        <CollectionModal
-          collection={collection}
-          onClose={() => setCollectionOpen(false)}
-          onRemove={onRemove}
-          onUpdate={onUpdate}
-          total={total}
-        />
-      )}
     </section>
   );
 }
@@ -1230,66 +1230,58 @@ function CollectionModal({
   total: number;
 }) {
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <section
-        aria-labelledby="collection-modal-title"
-        aria-modal="true"
-        className="collection-modal"
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-      >
-        <div className="modal-heading">
-          <div>
-            <p className="eyebrow">My Collection</p>
-            <h2 id="collection-modal-title">{formatCurrency(total)}</h2>
-            <small>
-              {collection.length} saved Pop{collection.length === 1 ? '' : 's'}
-            </small>
-          </div>
-          <button className="secondary-button compact" onClick={onClose} type="button">
-            Close
-          </button>
+    <section aria-labelledby="collection-modal-title" className="collection-modal" role="region">
+      <div className="modal-heading">
+        <div>
+          <p className="eyebrow">My Collection</p>
+          <h2 id="collection-modal-title">{formatCurrency(total)}</h2>
+          <small>
+            {collection.length} saved Pop{collection.length === 1 ? '' : 's'}
+          </small>
         </div>
+        <button className="secondary-button compact" onClick={onClose} type="button">
+          Close
+        </button>
+      </div>
 
-        <div className="collection-grid modal-collection-grid">
-          {collection.map((entry) => (
-            <article className="collection-card" key={entry.id}>
-              <img src={entry.item.imageUrl} alt={entry.item.name} />
-              <div>
-                <div className="collection-card-header">
-                  <h3>
-                    {entry.item.name} {entry.item.boxNumber ? `#${entry.item.boxNumber}` : ''}
-                  </h3>
-                  <button
-                    aria-label={`Remove ${entry.item.name} from collection`}
-                    className="remove-button"
-                    onClick={() => onRemove(entry)}
-                    type="button"
-                  >
-                    Remove
-                  </button>
-                </div>
-                <p>{formatCurrency(entry.valuation.medianPrice)} estimated median</p>
-                <select
-                  value={entry.condition}
-                  onChange={(event) => onUpdate(entry.id, { condition: event.target.value as Condition })}
+      <div className="collection-grid modal-collection-grid">
+        {collection.map((entry) => (
+          <article className="collection-card" key={entry.id}>
+            <img src={entry.item.imageUrl} alt={entry.item.name} />
+            <div>
+              <div className="collection-card-header">
+                <h3>
+                  {entry.item.name} {entry.item.boxNumber ? `#${entry.item.boxNumber}` : ''}
+                </h3>
+                <button
+                  aria-label={`Remove ${entry.item.name} from collection`}
+                  className="remove-button"
+                  onClick={() => onRemove(entry)}
+                  type="button"
                 >
-                  <option value="mint">Mint</option>
-                  <option value="good">Good</option>
-                  <option value="damaged">Damaged</option>
-                  <option value="out of box">Out of box</option>
-                </select>
-                <textarea
-                  onBlur={(event) => onUpdate(entry.id, { notes: event.target.value })}
-                  placeholder="Notes"
-                  defaultValue={entry.notes}
-                />
+                  Remove
+                </button>
               </div>
-            </article>
-          ))}
-        </div>
-      </section>
-    </div>
+              <p>{formatCurrency(entry.valuation.medianPrice)} estimated median</p>
+              <select
+                value={entry.condition}
+                onChange={(event) => onUpdate(entry.id, { condition: event.target.value as Condition })}
+              >
+                <option value="mint">Mint</option>
+                <option value="good">Good</option>
+                <option value="damaged">Damaged</option>
+                <option value="out of box">Out of box</option>
+              </select>
+              <textarea
+                onBlur={(event) => onUpdate(entry.id, { notes: event.target.value })}
+                placeholder="Notes"
+                defaultValue={entry.notes}
+              />
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 

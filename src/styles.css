@@ -132,6 +132,12 @@ a {
   margin-top: 18px;
 }
 
+.results-stack {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
 .panel {
   border-radius: 22px;
   padding: 18px;
@@ -703,26 +709,18 @@ textarea:focus {
   margin-top: 8px;
 }
 
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: grid;
-  place-items: center;
-  background: rgba(0, 0, 0, 0.72);
-  padding: 18px;
-}
-
 .collection-modal {
-  width: min(980px, 100%);
-  max-height: min(86vh, 920px);
+  width: 100%;
+  max-height: min(64vh, 680px);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 22px;
   background: linear-gradient(180deg, rgba(18, 18, 18, 0.98), rgba(5, 5, 5, 0.98));
-  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.75);
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
   padding: 18px;
 }
 
@@ -742,8 +740,10 @@ textarea:focus {
 }
 
 .modal-collection-grid {
+  max-height: min(48vh, 520px);
   overflow: auto;
   padding-right: 4px;
+  scrollbar-gutter: stable;
 }
 
 @media (max-width: 860px) {
@@ -786,7 +786,7 @@ textarea:focus {
   }
 
   .collection-modal {
-    max-height: 92vh;
+    max-height: 78vh;
     padding: 14px;
   }
 
