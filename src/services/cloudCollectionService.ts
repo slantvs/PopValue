@@ -1,5 +1,12 @@
-import type { CollectionEntry, Condition, FunkoItem, ValuationResult } from '../types';
+import type { CollectionEntry, Condition, FunkoItem, PublicProfile, ValuationResult } from '../types';
 import { supabase } from './supabaseClient';
+
+interface ProfileRow {
+  id: string;
+  username: string | null;
+  display_name: string | null;
+  collection_public: boolean | null;
+}
 
 interface CollectionEntryRow {
   id: string;
@@ -11,6 +18,25 @@ interface CollectionEntryRow {
   purchase_price: number | null;
   saved_at: string;
 }
+
+export const normalizePublicHandle = (value: string) =>
+  value
+    .trim()
+    .replace(/^@+/, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 30);
+
+const toProfile = (row: ProfileRow): PublicProfile | null =>
+  row.username
+    ? {
+        id: row.id,
+        username: row.username,
+        displayName: row.display_name ?? undefined,
+        collectionPublic: row.collection_public ?? true
+      }
+    : null;
 
 const toEntry = (row: CollectionEntryRow): CollectionEntry => ({
   id: row.id,
@@ -34,6 +60,86 @@ const toRow = (userId: string, entry: CollectionEntry) => ({
 });
 
 export class CloudCollectionService {
+  async getProfile(userId: string): Promise<PublicProfile | null> {
+    if (!supabase) return null;
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, username, display_name, collection_public')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data ? toProfile(data as ProfileRow) : null;
+  }
+
+  async saveProfile(userId: string, options: { username: string; collectionPublic: boolean }) {
+    if (!supabase) return null;
+
+    const username = normalizePublicHandle(options.username);
+    if (username.length < 3) throw new Error('Handle must be at least 3 characters.');
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .upsert(
+        {
+          id: userId,
+          username,
+          collection_public: options.collectionPublic
+        },
+        { onConflict: 'id' }
+      )
+      .select('id, username, display_name, collection_public')
+      .single();
+
+    if (error) {
+      if (error.code === '23505') throw new Error('That profile name is already taken.');
+      throw error;
+    }
+
+    return toProfile(data as ProfileRow);
+  }
+
+  async findPublicProfile(username: string): Promise<PublicProfile | null> {
+    if (!supabase) return null;
+
+    const handle = normalizePublicHandle(username);
+    if (handle.length < 3) return null;
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, username, display_name, collection_public')
+      .eq('username', handle)
+      .eq('collection_public', true)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data ? toProfile(data as ProfileRow) : null;
+  }
+
+  async listPublic(userId: string): Promise<CollectionEntry[]> {
+    if (!supabase) return [];
+
+    const { data, error } = await supabase
+      .from('collection_entries')
+      .select('*')
+      .eq('user_id', userId)
+      .order('saved_at', { ascending: false });
+
+    if (error) throw error;
+    return ((data ?? []) as CollectionEntryRow[]).map(toEntry);
+  }
+
+  async lookupPublicCollection(username: string) {
+    const profile = await this.findPublicProfile(username);
+    if (!profile) return null;
+
+    return {
+      profile,
+      entries: await this.listPublic(profile.id)
+    };
+  }
+
   async list(userId: string): Promise<CollectionEntry[]> {
     if (!supabase) return [];
 

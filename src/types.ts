@@ -97,3 +97,10 @@ export interface ProfileUser {
   id: string;
   email?: string;
 }
+
+export interface PublicProfile {
+  id: string;
+  username: string;
+  displayName?: string;
+  collectionPublic: boolean;
+}

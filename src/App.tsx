@@ -5,6 +5,7 @@ import type {
   FunkoItem,
   IdentificationCandidate,
   ManualSearchFields,
+  PublicProfile,
   ProfileUser,
   RetailOffer,
   ScanResult,
@@ -48,6 +49,14 @@ function App() {
   const [authMessage, setAuthMessage] = useState('');
   const [authLoading, setAuthLoading] = useState('');
   const [localCollectionCount, setLocalCollectionCount] = useState(() => collectionService.list().length);
+  const [profileDetails, setProfileDetails] = useState<PublicProfile | null>(null);
+  const [profileHandle, setProfileHandle] = useState('');
+  const [profilePublic, setProfilePublic] = useState(true);
+  const [profileLookup, setProfileLookup] = useState('');
+  const [publicProfile, setPublicProfile] = useState<PublicProfile | null>(null);
+  const [publicCollection, setPublicCollection] = useState<CollectionEntry[]>([]);
+  const [publicLookupError, setPublicLookupError] = useState('');
+  const [publicLookupLoading, setPublicLookupLoading] = useState('');
   const [notes, setNotes] = useState('');
   const [purchasePrice, setPurchasePrice] = useState('');
   const [condition, setCondition] = useState<Condition>('mint');
@@ -60,6 +69,13 @@ function App() {
   const [cameraActive, setCameraActive] = useState(false);
 
   const totalCollectionValue = useMemo(() => collectionService.totalEstimatedValue(collection), [collection]);
+  const publicCollectionValue = useMemo(
+    () => collectionService.totalEstimatedValue(publicCollection),
+    [publicCollection]
+  );
+  const profileShareUrl = profileDetails?.username
+    ? `${window.location.origin}${window.location.pathname}?profile=${profileDetails.username}`
+    : '';
 
   useEffect(() => {
     return () => {
@@ -80,6 +96,9 @@ function App() {
 
     if (!profileUser) {
       setCollection(collectionService.list());
+      setProfileDetails(null);
+      setProfileHandle('');
+      setProfilePublic(true);
       setLocalCollectionCount(collectionService.list().length);
       return () => {
         active = false;
@@ -87,12 +106,21 @@ function App() {
     }
 
     setAuthLoading('Loading profile collection...');
-    cloudCollectionService
-      .list(profileUser.id)
-      .then((entries) => {
+    Promise.allSettled([cloudCollectionService.list(profileUser.id), cloudCollectionService.getProfile(profileUser.id)])
+      .then(([entriesResult, profileResult]) => {
         if (!active) return;
+
+        const entries = entriesResult.status === 'fulfilled' ? entriesResult.value : [];
+        const profile = profileResult.status === 'fulfilled' ? profileResult.value : null;
+
         setCollection(entries);
+        setProfileDetails(profile);
+        setProfileHandle(profile?.username ?? '');
+        setProfilePublic(profile?.collectionPublic ?? true);
         setLocalCollectionCount(collectionService.list().length);
+        if (profileResult.status === 'rejected') {
+          setAuthError('Run the latest Supabase schema to enable public profile handles.');
+        }
         setAuthMessage(entries.length ? 'Profile collection loaded.' : 'Profile ready. Saved Pops will sync here.');
       })
       .catch(() => {
@@ -106,6 +134,16 @@ function App() {
       active = false;
     };
   }, [profileUser]);
+
+  useEffect(() => {
+    if (!authService.configured) return;
+
+    const handle = new URLSearchParams(window.location.search).get('profile');
+    if (!handle) return;
+
+    setProfileLookup(handle);
+    void lookupPublicCollection(handle);
+  }, []);
 
   function applyScanResult(scan: ScanResult) {
     if (imagePreviewRef.current && imagePreviewRef.current !== scan.imagePreview) {
@@ -406,6 +444,62 @@ function App() {
     }
   }
 
+  async function savePublicProfile(event: FormEvent) {
+    event.preventDefault();
+    if (!profileUser) return;
+
+    setAuthLoading('Saving public profile...');
+    setAuthError('');
+    setAuthMessage('');
+
+    try {
+      const profile = await cloudCollectionService.saveProfile(profileUser.id, {
+        username: profileHandle,
+        collectionPublic: profilePublic
+      });
+
+      setProfileDetails(profile);
+      setProfileHandle(profile?.username ?? '');
+      setAuthMessage(profile?.collectionPublic ? 'Public profile saved.' : 'Profile saved. Public lookup is off.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Try another profile name.';
+      setAuthError(`Could not save public profile. ${message}`);
+    } finally {
+      setAuthLoading('');
+    }
+  }
+
+  async function lookupPublicCollection(handleOverride?: string) {
+    const handle = (handleOverride ?? profileLookup).trim();
+    if (!handle) return;
+
+    setPublicLookupLoading('Loading public collection...');
+    setPublicLookupError('');
+
+    try {
+      const result = await cloudCollectionService.lookupPublicCollection(handle);
+      if (!result) {
+        setPublicProfile(null);
+        setPublicCollection([]);
+        setPublicLookupError('No public profile found for that name.');
+        return;
+      }
+
+      setPublicProfile(result.profile);
+      setPublicCollection(result.entries);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Try again.';
+      setPublicLookupError(`Could not load that public collection. ${message}`);
+    } finally {
+      setPublicLookupLoading('');
+    }
+  }
+
+  function handlePublicLookupSubmit(event: FormEvent) {
+    event.preventDefault();
+    void lookupPublicCollection();
+  }
+
   return (
     <main className="app-shell">
       <section className="hero">
@@ -562,10 +656,25 @@ function App() {
           onExport={exportCollection}
           onImport={importCollection}
           onMoveLocalCollection={moveLocalCollectionToProfile}
+          onProfileHandleChange={setProfileHandle}
+          onProfilePublicChange={setProfilePublic}
+          onPublicLookupChange={setProfileLookup}
+          onPublicLookupSubmit={handlePublicLookupSubmit}
           onRemove={removeCollectionEntry}
+          onSavePublicProfile={savePublicProfile}
           onSignIn={sendSignInLink}
           onSignOut={signOutProfile}
           onUpdate={updateCollectionEntry}
+          profileDetails={profileDetails}
+          profileHandle={profileHandle}
+          profilePublic={profilePublic}
+          profileShareUrl={profileShareUrl}
+          publicCollection={publicCollection}
+          publicCollectionValue={publicCollectionValue}
+          publicLookup={profileLookup}
+          publicLookupError={publicLookupError}
+          publicLookupLoading={publicLookupLoading}
+          publicProfile={publicProfile}
           profileUser={profileUser}
           total={totalCollectionValue}
         />
@@ -760,8 +869,15 @@ function ProfileCard({
   localCollectionCount,
   onAuthEmailChange,
   onMoveLocalCollection,
+  onProfileHandleChange,
+  onProfilePublicChange,
+  onSavePublicProfile,
   onSignIn,
   onSignOut,
+  profileDetails,
+  profileHandle,
+  profilePublic,
+  profileShareUrl,
   profileUser
 }: {
   authEmail: string;
@@ -772,8 +888,15 @@ function ProfileCard({
   localCollectionCount: number;
   onAuthEmailChange: (email: string) => void;
   onMoveLocalCollection: () => void;
+  onProfileHandleChange: (handle: string) => void;
+  onProfilePublicChange: (isPublic: boolean) => void;
+  onSavePublicProfile: (event: FormEvent) => void;
   onSignIn: (event: FormEvent) => void;
   onSignOut: () => void;
+  profileDetails: PublicProfile | null;
+  profileHandle: string;
+  profilePublic: boolean;
+  profileShareUrl: string;
   profileUser: ProfileUser | null;
 }) {
   return (
@@ -795,6 +918,33 @@ function ProfileCard({
       ) : profileUser ? (
         <>
           <p>Saved Pops sync to this profile across devices.</p>
+          <form className="profile-handle-form" onSubmit={onSavePublicProfile}>
+            <label>
+              Public profile name
+              <input
+                autoComplete="off"
+                onChange={(event) => onProfileHandleChange(event.target.value)}
+                placeholder="bradley-pops"
+                value={profileHandle}
+              />
+            </label>
+            <label className="profile-toggle">
+              <input
+                checked={profilePublic}
+                onChange={(event) => onProfilePublicChange(event.target.checked)}
+                type="checkbox"
+              />
+              Public collection lookup
+            </label>
+            <button className="primary-button compact" disabled={Boolean(authLoading)} type="submit">
+              Save profile
+            </button>
+          </form>
+          {profileDetails?.username && profileShareUrl && (
+            <p>
+              Share: <span className="profile-link">{profileShareUrl}</span>
+            </p>
+          )}
           {localCollectionCount > 0 && (
             <button
               className="secondary-button compact"
@@ -828,6 +978,80 @@ function ProfileCard({
   );
 }
 
+function PublicCollectionLookup({
+  onPublicLookupChange,
+  onPublicLookupSubmit,
+  publicCollection,
+  publicCollectionValue,
+  publicLookup,
+  publicLookupError,
+  publicLookupLoading,
+  publicProfile
+}: {
+  onPublicLookupChange: (handle: string) => void;
+  onPublicLookupSubmit: (event: FormEvent) => void;
+  publicCollection: CollectionEntry[];
+  publicCollectionValue: number;
+  publicLookup: string;
+  publicLookupError: string;
+  publicLookupLoading: string;
+  publicProfile: PublicProfile | null;
+}) {
+  return (
+    <div className="profile-card public-lookup-card">
+      <div className="profile-card-header">
+        <div>
+          <strong>Profile Lookup</strong>
+          <span>View another public collection</span>
+        </div>
+      </div>
+
+      <form className="profile-form" onSubmit={onPublicLookupSubmit}>
+        <input
+          autoComplete="off"
+          onChange={(event) => onPublicLookupChange(event.target.value)}
+          placeholder="@profile-name"
+          value={publicLookup}
+        />
+        <button className="secondary-button compact" disabled={Boolean(publicLookupLoading)} type="submit">
+          View
+        </button>
+      </form>
+
+      {publicLookupError && <small className="profile-error">{publicLookupError}</small>}
+      {publicLookupLoading && <small>{publicLookupLoading}</small>}
+
+      {publicProfile && (
+        <div className="public-collection">
+          <div className="public-collection-heading">
+            <strong>@{publicProfile.username}</strong>
+            <span>
+              {formatCurrency(publicCollectionValue)} - {publicCollection.length} saved
+            </span>
+          </div>
+          {publicCollection.length ? (
+            <div className="public-collection-list">
+              {publicCollection.map((entry) => (
+                <article className="public-entry" key={entry.id}>
+                  <img src={entry.item.imageUrl} alt={entry.item.name} />
+                  <span>
+                    <strong>
+                      {entry.item.name} {entry.item.boxNumber ? `#${entry.item.boxNumber}` : ''}
+                    </strong>
+                    <small>{formatCurrency(entry.valuation.medianPrice)} estimated median</small>
+                  </span>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <small>This public collection is empty.</small>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CollectionPanel({
   authEmail,
   authError,
@@ -840,10 +1064,25 @@ function CollectionPanel({
   onExport,
   onImport,
   onMoveLocalCollection,
+  onProfileHandleChange,
+  onProfilePublicChange,
+  onPublicLookupChange,
+  onPublicLookupSubmit,
   onRemove,
+  onSavePublicProfile,
   onSignIn,
   onSignOut,
   onUpdate,
+  profileDetails,
+  profileHandle,
+  profilePublic,
+  profileShareUrl,
+  publicCollection,
+  publicCollectionValue,
+  publicLookup,
+  publicLookupError,
+  publicLookupLoading,
+  publicProfile,
   profileUser,
   total
 }: {
@@ -858,10 +1097,25 @@ function CollectionPanel({
   onExport: () => void;
   onImport: (file: File) => void;
   onMoveLocalCollection: () => void;
+  onProfileHandleChange: (handle: string) => void;
+  onProfilePublicChange: (isPublic: boolean) => void;
+  onPublicLookupChange: (handle: string) => void;
+  onPublicLookupSubmit: (event: FormEvent) => void;
   onRemove: (entry: CollectionEntry) => void;
+  onSavePublicProfile: (event: FormEvent) => void;
   onSignIn: (event: FormEvent) => void;
   onSignOut: () => void;
   onUpdate: (id: string, patch: Partial<CollectionEntry>) => void;
+  profileDetails: PublicProfile | null;
+  profileHandle: string;
+  profilePublic: boolean;
+  profileShareUrl: string;
+  publicCollection: CollectionEntry[];
+  publicCollectionValue: number;
+  publicLookup: string;
+  publicLookupError: string;
+  publicLookupLoading: string;
+  publicProfile: PublicProfile | null;
   profileUser: ProfileUser | null;
   total: number;
 }) {
@@ -884,9 +1138,27 @@ function CollectionPanel({
         localCollectionCount={localCollectionCount}
         onAuthEmailChange={onAuthEmailChange}
         onMoveLocalCollection={onMoveLocalCollection}
+        onProfileHandleChange={onProfileHandleChange}
+        onProfilePublicChange={onProfilePublicChange}
+        onSavePublicProfile={onSavePublicProfile}
         onSignIn={onSignIn}
         onSignOut={onSignOut}
+        profileDetails={profileDetails}
+        profileHandle={profileHandle}
+        profilePublic={profilePublic}
+        profileShareUrl={profileShareUrl}
         profileUser={profileUser}
+      />
+
+      <PublicCollectionLookup
+        onPublicLookupChange={onPublicLookupChange}
+        onPublicLookupSubmit={onPublicLookupSubmit}
+        publicCollection={publicCollection}
+        publicCollectionValue={publicCollectionValue}
+        publicLookup={publicLookup}
+        publicLookupError={publicLookupError}
+        publicLookupLoading={publicLookupLoading}
+        publicProfile={publicProfile}
       />
 
       <div className="collection-actions">

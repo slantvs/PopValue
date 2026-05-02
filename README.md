@@ -106,6 +106,8 @@ Use the base Supabase project URL only. Do not use the Data API REST endpoint en
 
 In Supabase Auth settings, set the site URL to `https://popvalue.vercel.app` and add that same URL as an allowed redirect URL.
 
+Signed-in users can claim a unique public profile name. Public collection links use `https://popvalue.vercel.app/?profile=profile-name`, and lookup only works when the profile has public sharing enabled.
+
 ## Deployment
 
 GitHub Pages can host the frontend only, but this project also needs an API host for live eBay lookups. Recommended path:

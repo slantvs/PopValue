@@ -18,7 +18,8 @@ The schema creates:
 
 - `profiles`
 - `collection_entries`
-- Row Level Security policies so each user can only access their own rows
+- Row Level Security policies so each user can only edit their own rows
+- Public lookup policies so collections are readable by handle only when public sharing is enabled
 
 ## 3. Configure Auth URLs
 
@@ -44,3 +45,13 @@ Use the public anon key only. Do not use the service role key in PopValue fronte
 ## 5. Redeploy
 
 Redeploy PopValue after adding the env vars. The Profile card will switch from setup-needed mode to email login mode.
+
+## Public Profiles
+
+Signed-in users can claim a unique profile name in the app. Public profile links use:
+
+```text
+https://popvalue.vercel.app/?profile=profile-name
+```
+
+If public lookup is disabled, other users cannot load that collection by handle.

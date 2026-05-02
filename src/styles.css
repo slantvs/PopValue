@@ -577,6 +577,73 @@ textarea:focus {
   gap: 8px;
 }
 
+.profile-handle-form {
+  display: grid;
+  gap: 8px;
+}
+
+.profile-toggle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: #d4d4d8;
+  font-size: 0.9rem;
+}
+
+.profile-toggle input {
+  width: auto;
+}
+
+.profile-link {
+  color: #fecaca;
+  overflow-wrap: anywhere;
+}
+
+.public-lookup-card {
+  margin-top: 0;
+}
+
+.public-collection {
+  display: grid;
+  gap: 10px;
+}
+
+.public-collection-heading {
+  display: grid;
+  gap: 2px;
+}
+
+.public-collection-heading span {
+  color: #a1a1aa;
+}
+
+.public-collection-list {
+  display: grid;
+  gap: 8px;
+}
+
+.public-entry {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: #030303;
+  padding: 8px;
+}
+
+.public-entry img {
+  width: 54px;
+  height: 70px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.public-entry small {
+  color: #a1a1aa;
+}
+
 .collection-card-header {
   display: grid;
   grid-template-columns: 1fr auto;

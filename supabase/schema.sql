@@ -3,8 +3,35 @@
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   display_name text,
+  username text,
+  collection_public boolean not null default true,
   created_at timestamptz not null default now()
 );
+
+alter table public.profiles
+  add column if not exists display_name text,
+  add column if not exists username text,
+  add column if not exists collection_public boolean not null default true,
+  add column if not exists created_at timestamptz not null default now();
+
+create unique index if not exists profiles_username_unique_idx
+  on public.profiles (username)
+  where username is not null;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'profiles_username_format_check'
+      and conrelid = 'public.profiles'::regclass
+  ) then
+    alter table public.profiles
+      add constraint profiles_username_format_check
+      check (username is null or username ~ '^[a-z0-9][a-z0-9_-]{2,29}$');
+  end if;
+end;
+$$;
 
 alter table public.profiles enable row level security;
 
@@ -14,6 +41,13 @@ create policy "Users can read their own profile"
   for select
   to authenticated
   using ((select auth.uid()) = id);
+
+drop policy if exists "Anyone can read public profiles" on public.profiles;
+create policy "Anyone can read public profiles"
+  on public.profiles
+  for select
+  to anon, authenticated
+  using (collection_public = true and username is not null);
 
 drop policy if exists "Users can insert their own profile" on public.profiles;
 create policy "Users can insert their own profile"
@@ -55,6 +89,21 @@ create policy "Users can read their own collection"
   for select
   to authenticated
   using ((select auth.uid()) = user_id);
+
+drop policy if exists "Anyone can read public collections" on public.collection_entries;
+create policy "Anyone can read public collections"
+  on public.collection_entries
+  for select
+  to anon, authenticated
+  using (
+    exists (
+      select 1
+      from public.profiles
+      where profiles.id = collection_entries.user_id
+        and profiles.collection_public = true
+        and profiles.username is not null
+    )
+  );
 
 drop policy if exists "Users can insert their own collection" on public.collection_entries;
 create policy "Users can insert their own collection"
