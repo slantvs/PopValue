@@ -395,6 +395,8 @@ textarea:focus {
 .product-hero img {
   width: 150px;
   height: 180px;
+  background: #08090b;
+  object-fit: contain;
 }
 
 .product-hero p {

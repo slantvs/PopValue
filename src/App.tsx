@@ -12,6 +12,7 @@ import type {
 import { collectionService } from './services/collectionService';
 import { ebayService } from './services/ebayService';
 import { identifyService } from './services/identifyService';
+import { enrichItemImageFromListings } from './services/itemImageService';
 import { buildProvisionalFunkoItem } from './services/provisionalItemService';
 import { retailService } from './services/retailService';
 import { scanService } from './services/scanService';
@@ -191,7 +192,20 @@ function App() {
 
     try {
       const [lookup, offers] = await Promise.all([ebayService.searchListings(item), retailService.compare(item)]);
-      setValuation(valuationService.estimate(item, lookup.activeListings, lookup.soldListings));
+      const estimate = valuationService.estimate(item, lookup.activeListings, lookup.soldListings);
+      const enrichedItem = enrichItemImageFromListings(item, [
+        ...estimate.listingsUsed,
+        ...lookup.activeListings,
+        ...lookup.soldListings
+      ]);
+
+      setSelectedItem(enrichedItem);
+      setCandidates((current) =>
+        current.map((candidate) =>
+          candidate.item.id === item.id ? { ...candidate, item: enrichedItem } : candidate
+        )
+      );
+      setValuation(estimate);
       setMarketMessages(lookup.messages);
       setRetailOffers(offers);
     } catch {
