@@ -22,6 +22,7 @@ import {
 import { ebayService } from './services/ebayService';
 import { identifyService } from './services/identifyService';
 import { enrichItemImageFromListings } from './services/itemImageService';
+import { enrichItemIdentityFromListings } from './services/itemIdentityService';
 import { buildProvisionalFunkoItem } from './services/provisionalItemService';
 import { retailService } from './services/retailService';
 import { scanService } from './services/scanService';
@@ -365,9 +366,11 @@ function App() {
     setCondition(item.condition);
 
     try {
-      const [lookup, offers] = await Promise.all([ebayService.searchListings(item), retailService.compare(item)]);
-      const estimate = valuationService.estimate(item, lookup.activeListings, lookup.soldListings);
-      const enrichedItem = enrichItemImageFromListings(item, [
+      const lookup = await ebayService.searchListings(item);
+      const identityItem = enrichItemIdentityFromListings(item, [...lookup.activeListings, ...lookup.soldListings]);
+      const estimate = valuationService.estimate(identityItem, lookup.activeListings, lookup.soldListings);
+      const offers = await retailService.compare(identityItem);
+      const enrichedItem = enrichItemImageFromListings(identityItem, [
         ...estimate.listingsUsed,
         ...lookup.activeListings,
         ...lookup.soldListings
