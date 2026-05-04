@@ -379,26 +379,26 @@ function App() {
     if (
       existingEntry &&
       !window.confirm(
-        'This Pop already exists in your collection. Update the existing saved entry with the latest estimate?'
+        'This Pop is already in your collection. Do you want to add another copy?'
       )
     ) {
       return;
     }
 
     const entry: CollectionEntry = {
-      id: existingEntry?.id ?? `${selectedItem.id}-${Date.now()}`,
+      id: `${selectedItem.id}-${Date.now()}`,
       item: { ...selectedItem, condition },
       valuation,
       condition,
-      notes: notes.trim() || existingEntry?.notes || '',
-      purchasePrice: purchasePrice ? Number(purchasePrice) : existingEntry?.purchasePrice,
-      savedAt: existingEntry?.savedAt ?? new Date().toISOString()
+      notes: notes.trim(),
+      purchasePrice: purchasePrice ? Number(purchasePrice) : undefined,
+      savedAt: new Date().toISOString()
     };
 
     try {
       if (profileUser) {
         setCollection(await cloudCollectionService.save(profileUser.id, entry));
-        setAuthMessage(existingEntry ? 'Updated the existing Pop in your profile.' : 'Saved to your profile.');
+        setAuthMessage(existingEntry ? 'Added another copy to your profile.' : 'Saved to your profile.');
       } else {
         setCollection(collectionService.save(entry));
         setLocalCollectionCount(collectionService.list().length);
@@ -993,8 +993,8 @@ function ResultsPanel({
             <h3>Save to My Collection</h3>
             {duplicateEntry && (
               <div className="note">
-                Already saved on {new Date(duplicateEntry.savedAt).toLocaleDateString()}. Saving will offer to update
-                the existing entry.
+                Already saved on {new Date(duplicateEntry.savedAt).toLocaleDateString()}. Saving will ask before
+                adding another copy.
               </div>
             )}
             <div className="field-row">
@@ -1022,7 +1022,7 @@ function ResultsPanel({
               <textarea onChange={(event) => setNotes(event.target.value)} value={notes} />
             </label>
             <button className="primary-button" onClick={onSave} type="button">
-              {duplicateEntry ? 'Update Saved Pop' : 'Add to Collection'}
+              {duplicateEntry ? 'Add Another Copy' : 'Add to Collection'}
             </button>
           </div>
         </>
