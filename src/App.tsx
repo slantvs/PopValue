@@ -40,6 +40,7 @@ const formatCurrency = (value: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
 
 const fallbackImageUrl = 'https://placehold.co/600x800/111827/f8fafc?text=PopValue';
+const profileAvatarMaxBytes = 5 * 1024 * 1024;
 const conditionLabels: Record<Condition, string> = {
   mint: 'Mint',
   good: 'Good',
@@ -91,6 +92,8 @@ function App() {
   const [profileHandle, setProfileHandle] = useState('');
   const [profileDisplayName, setProfileDisplayName] = useState('');
   const [profileAvatarUrl, setProfileAvatarUrl] = useState('');
+  const [profileAvatarFile, setProfileAvatarFile] = useState<File | null>(null);
+  const [profileAvatarPreview, setProfileAvatarPreview] = useState('');
   const [profileBio, setProfileBio] = useState('');
   const [profilePublic, setProfilePublic] = useState(true);
   const [profileLookup, setProfileLookup] = useState('');
@@ -106,6 +109,7 @@ function App() {
   const [loading, setLoading] = useState('');
   const [error, setError] = useState('');
   const imagePreviewRef = useRef<string | undefined>(undefined);
+  const profileAvatarPreviewRef = useRef<string | undefined>(undefined);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const cameraControlsRef = useRef<CameraScannerControls | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
@@ -127,6 +131,7 @@ function App() {
     return () => {
       cameraControlsRef.current?.stop();
       if (imagePreviewRef.current) URL.revokeObjectURL(imagePreviewRef.current);
+      if (profileAvatarPreviewRef.current) URL.revokeObjectURL(profileAvatarPreviewRef.current);
     };
   }, []);
 
@@ -157,6 +162,7 @@ function App() {
       setProfileHandle('');
       setProfileDisplayName('');
       setProfileAvatarUrl('');
+      clearProfileAvatarPreview();
       setProfileBio('');
       setProfilePublic(true);
       setLocalCollectionCount(collectionService.list().length);
@@ -178,6 +184,7 @@ function App() {
         setProfileHandle(profile?.username ?? '');
         setProfileDisplayName(profile?.displayName ?? '');
         setProfileAvatarUrl(profile?.avatarUrl ?? '');
+        clearProfileAvatarPreview();
         setProfileBio(profile?.bio ?? '');
         setProfilePublic(profile?.collectionPublic ?? true);
         setLocalCollectionCount(collectionService.list().length);
@@ -527,10 +534,14 @@ function App() {
     setAuthMessage('');
 
     try {
+      const avatarUrl = profileAvatarFile
+        ? await cloudCollectionService.uploadProfileAvatar(profileUser.id, profileAvatarFile)
+        : profileAvatarUrl;
+
       const profile = await cloudCollectionService.saveProfile(profileUser.id, {
         username: profileHandle,
         displayName: profileDisplayName,
-        avatarUrl: profileAvatarUrl,
+        avatarUrl,
         bio: profileBio,
         collectionPublic: profilePublic
       });
@@ -539,6 +550,7 @@ function App() {
       setProfileHandle(profile?.username ?? '');
       setProfileDisplayName(profile?.displayName ?? profileDisplayName.trim());
       setProfileAvatarUrl(profile?.avatarUrl ?? '');
+      clearProfileAvatarPreview();
       setProfileBio(profile?.bio ?? '');
       setAuthMessage(profile?.collectionPublic ? 'Public profile saved.' : 'Profile saved. Public lookup is off.');
     } catch (error) {
@@ -547,6 +559,43 @@ function App() {
     } finally {
       setAuthLoading('');
     }
+  }
+
+  function clearProfileAvatarPreview() {
+    if (profileAvatarPreviewRef.current) {
+      URL.revokeObjectURL(profileAvatarPreviewRef.current);
+      profileAvatarPreviewRef.current = undefined;
+    }
+    setProfileAvatarFile(null);
+    setProfileAvatarPreview('');
+  }
+
+  function handleProfileAvatarSelect(file: File | null) {
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setAuthError('Choose an image file for your profile photo.');
+      return;
+    }
+
+    if (file.size > profileAvatarMaxBytes) {
+      setAuthError('Profile photo must be under 5 MB.');
+      return;
+    }
+
+    clearProfileAvatarPreview();
+    const preview = URL.createObjectURL(file);
+    profileAvatarPreviewRef.current = preview;
+    setProfileAvatarFile(file);
+    setProfileAvatarPreview(preview);
+    setAuthError('');
+    setAuthMessage('Profile photo selected. Save profile to upload it.');
+  }
+
+  function removeProfileAvatar() {
+    clearProfileAvatarPreview();
+    setProfileAvatarUrl('');
+    setAuthMessage('Profile photo will be removed when you save profile.');
   }
 
   async function lookupPublicCollection(handleOverride?: string) {
@@ -770,11 +819,12 @@ function App() {
           onExport={exportCollection}
           onImport={importCollection}
           onMoveLocalCollection={moveLocalCollectionToProfile}
-          onProfileAvatarUrlChange={setProfileAvatarUrl}
           onProfileBioChange={setProfileBio}
           onProfileDisplayNameChange={setProfileDisplayName}
           onProfileHandleChange={setProfileHandle}
           onProfilePublicChange={setProfilePublic}
+          onProfileAvatarRemove={removeProfileAvatar}
+          onProfileAvatarSelect={handleProfileAvatarSelect}
           onPublicLookupChange={setProfileLookup}
           onPublicLookupClear={clearPublicLookup}
           onPublicLookupSubmit={handlePublicLookupSubmit}
@@ -783,6 +833,8 @@ function App() {
           onSignOut={signOutProfile}
           onToggleCollection={() => setCollectionOpen((current) => !current)}
           profileDetails={profileDetails}
+          profileAvatarFile={profileAvatarFile}
+          profileAvatarPreview={profileAvatarPreview}
           profileAvatarUrl={profileAvatarUrl}
           profileBio={profileBio}
           profileDisplayName={profileDisplayName}
@@ -1053,15 +1105,18 @@ function ProfileCard({
   localCollectionCount,
   onAuthEmailChange,
   onMoveLocalCollection,
-  onProfileAvatarUrlChange,
   onProfileBioChange,
   onProfileDisplayNameChange,
   onProfileHandleChange,
   onProfilePublicChange,
+  onProfileAvatarRemove,
+  onProfileAvatarSelect,
   onSavePublicProfile,
   onSignIn,
   onSignOut,
   profileDetails,
+  profileAvatarFile,
+  profileAvatarPreview,
   profileAvatarUrl,
   profileBio,
   profileDisplayName,
@@ -1078,15 +1133,18 @@ function ProfileCard({
   localCollectionCount: number;
   onAuthEmailChange: (email: string) => void;
   onMoveLocalCollection: () => void;
-  onProfileAvatarUrlChange: (url: string) => void;
   onProfileBioChange: (bio: string) => void;
   onProfileDisplayNameChange: (name: string) => void;
   onProfileHandleChange: (handle: string) => void;
   onProfilePublicChange: (isPublic: boolean) => void;
+  onProfileAvatarRemove: () => void;
+  onProfileAvatarSelect: (file: File | null) => void;
   onSavePublicProfile: (event: FormEvent) => void;
   onSignIn: (event: FormEvent) => void;
   onSignOut: () => void;
   profileDetails: PublicProfile | null;
+  profileAvatarFile: File | null;
+  profileAvatarPreview: string;
   profileAvatarUrl: string;
   profileBio: string;
   profileDisplayName: string;
@@ -1116,7 +1174,7 @@ function ProfileCard({
           <div className="profile-identity">
             <ProfileAvatar
               profile={{
-                avatarUrl: profileAvatarUrl,
+                avatarUrl: profileAvatarPreview || profileAvatarUrl,
                 displayName: profileDisplayName,
                 username: profileDetails?.username ?? profileHandle
               }}
@@ -1146,16 +1204,37 @@ function ProfileCard({
                 value={profileHandle}
               />
             </label>
-            <label>
-              Avatar image URL
-              <input
-                autoComplete="url"
-                inputMode="url"
-                onChange={(event) => onProfileAvatarUrlChange(event.target.value)}
-                placeholder="https://..."
-                value={profileAvatarUrl}
-              />
-            </label>
+            <div className="profile-upload-field">
+              <span className="field-label">Profile photo</span>
+              <div className="profile-upload-row">
+                <ProfileAvatar
+                  profile={{
+                    avatarUrl: profileAvatarPreview || profileAvatarUrl,
+                    displayName: profileDisplayName,
+                    username: profileDetails?.username ?? profileHandle
+                  }}
+                />
+                <label className="import-button avatar-upload-button">
+                  Upload image
+                  <input
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    type="file"
+                    onChange={(event) => {
+                      onProfileAvatarSelect(event.target.files?.[0] ?? null);
+                      event.target.value = '';
+                    }}
+                  />
+                </label>
+                {(profileAvatarPreview || profileAvatarUrl) && (
+                  <button className="secondary-button compact" onClick={onProfileAvatarRemove} type="button">
+                    Remove
+                  </button>
+                )}
+              </div>
+              <small>
+                {profileAvatarFile ? `${profileAvatarFile.name} selected. Save profile to upload.` : 'PNG, JPG, WebP, or GIF up to 5 MB.'}
+              </small>
+            </div>
             <label>
               Bio
               <textarea
@@ -1320,11 +1399,12 @@ function CollectionPanel({
   onExport,
   onImport,
   onMoveLocalCollection,
-  onProfileAvatarUrlChange,
   onProfileBioChange,
   onProfileDisplayNameChange,
   onProfileHandleChange,
   onProfilePublicChange,
+  onProfileAvatarRemove,
+  onProfileAvatarSelect,
   onPublicLookupChange,
   onPublicLookupClear,
   onPublicLookupSubmit,
@@ -1333,6 +1413,8 @@ function CollectionPanel({
   onSignOut,
   onToggleCollection,
   profileDetails,
+  profileAvatarFile,
+  profileAvatarPreview,
   profileAvatarUrl,
   profileBio,
   profileDisplayName,
@@ -1360,11 +1442,12 @@ function CollectionPanel({
   onExport: () => void;
   onImport: (file: File) => void;
   onMoveLocalCollection: () => void;
-  onProfileAvatarUrlChange: (url: string) => void;
   onProfileBioChange: (bio: string) => void;
   onProfileDisplayNameChange: (name: string) => void;
   onProfileHandleChange: (handle: string) => void;
   onProfilePublicChange: (isPublic: boolean) => void;
+  onProfileAvatarRemove: () => void;
+  onProfileAvatarSelect: (file: File | null) => void;
   onPublicLookupChange: (handle: string) => void;
   onPublicLookupClear: () => void;
   onPublicLookupSubmit: (event: FormEvent) => void;
@@ -1373,6 +1456,8 @@ function CollectionPanel({
   onSignOut: () => void;
   onToggleCollection: () => void;
   profileDetails: PublicProfile | null;
+  profileAvatarFile: File | null;
+  profileAvatarPreview: string;
   profileAvatarUrl: string;
   profileBio: string;
   profileDisplayName: string;
@@ -1407,15 +1492,18 @@ function CollectionPanel({
         localCollectionCount={localCollectionCount}
         onAuthEmailChange={onAuthEmailChange}
         onMoveLocalCollection={onMoveLocalCollection}
-        onProfileAvatarUrlChange={onProfileAvatarUrlChange}
         onProfileBioChange={onProfileBioChange}
         onProfileDisplayNameChange={onProfileDisplayNameChange}
         onProfileHandleChange={onProfileHandleChange}
         onProfilePublicChange={onProfilePublicChange}
+        onProfileAvatarRemove={onProfileAvatarRemove}
+        onProfileAvatarSelect={onProfileAvatarSelect}
         onSavePublicProfile={onSavePublicProfile}
         onSignIn={onSignIn}
         onSignOut={onSignOut}
         profileDetails={profileDetails}
+        profileAvatarFile={profileAvatarFile}
+        profileAvatarPreview={profileAvatarPreview}
         profileAvatarUrl={profileAvatarUrl}
         profileBio={profileBio}
         profileDisplayName={profileDisplayName}

@@ -106,7 +106,7 @@ Use the base Supabase project URL only. Do not use the Data API REST endpoint en
 
 In Supabase Auth settings, set the site URL to `https://popvalue.vercel.app` and add that same URL as an allowed redirect URL.
 
-Signed-in users can claim a unique public profile name, display name, avatar URL, and short bio. Public collection links use `https://popvalue.vercel.app/u/profile-name`, and lookup only works when the profile has public sharing enabled.
+Signed-in users can claim a unique public profile name, display name, uploaded profile photo, and short bio. Public collection links use `https://popvalue.vercel.app/u/profile-name`, and lookup only works when the profile has public sharing enabled.
 
 ## Deployment
 

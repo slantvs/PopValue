@@ -661,6 +661,34 @@ textarea:focus {
   object-fit: cover;
 }
 
+.profile-upload-field {
+  display: grid;
+  gap: 8px;
+}
+
+.field-label {
+  color: #a1a1aa;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.profile-upload-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.avatar-upload-button {
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.profile-upload-field small {
+  color: #a1a1aa;
+  line-height: 1.4;
+}
+
 .profile-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -907,6 +935,7 @@ textarea:focus {
 
   .collection-actions,
   .profile-form,
+  .profile-upload-row,
   .collection-toolbar,
   .collection-compact-entry {
     grid-template-columns: 1fr;

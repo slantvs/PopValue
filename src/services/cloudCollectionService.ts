@@ -49,6 +49,8 @@ const cleanProfileUrl = (value: string | undefined) => {
 
 const profileSelect = 'id, username, display_name, avatar_url, bio, collection_public';
 const legacyProfileSelect = 'id, username, display_name, collection_public';
+const profileAvatarBucket = 'profile-avatars';
+const profileAvatarMaxBytes = 5 * 1024 * 1024;
 
 const isMissingProfileColumnError = (error: { code?: string; message?: string }) =>
   error.code === 'PGRST204' ||
@@ -89,6 +91,33 @@ const toRow = (userId: string, entry: CollectionEntry) => ({
 });
 
 export class CloudCollectionService {
+  async uploadProfileAvatar(userId: string, file: File) {
+    if (!supabase) throw new Error('Supabase is not configured.');
+    if (!file.type.startsWith('image/')) throw new Error('Choose an image file.');
+    if (file.size > profileAvatarMaxBytes) throw new Error('Profile photo must be under 5 MB.');
+
+    const extension =
+      file.name
+        .split('.')
+        .pop()
+        ?.toLowerCase()
+        .replace(/[^a-z0-9]/g, '') ||
+      file.type.split('/')[1] ||
+      'jpg';
+    const path = `${userId}/${Date.now()}.${extension}`;
+    const { error } = await supabase.storage.from(profileAvatarBucket).upload(path, file, {
+      cacheControl: '3600',
+      contentType: file.type,
+      upsert: false
+    });
+
+    if (error) throw error;
+
+    const { data } = supabase.storage.from(profileAvatarBucket).getPublicUrl(path);
+    if (!data.publicUrl) throw new Error('Could not create a public avatar URL.');
+    return data.publicUrl;
+  }
+
   async getProfile(userId: string): Promise<PublicProfile | null> {
     if (!supabase) return null;
 
