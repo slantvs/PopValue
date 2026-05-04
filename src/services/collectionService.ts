@@ -1,4 +1,4 @@
-import type { CollectionEntry, Condition } from '../types';
+import type { CollectionEntry, Condition, FunkoItem } from '../types';
 
 const STORAGE_KEY = 'popvalue.collection.v1';
 
@@ -7,6 +7,34 @@ export function parseCollectionExport(contents: string) {
   const entries = Array.isArray(parsed) ? parsed : parsed.entries;
   if (!Array.isArray(entries)) throw new Error('Invalid collection export');
   return entries;
+}
+
+const normalizeCollectionToken = (value?: string) =>
+  (value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ');
+
+export function collectionItemKey(item: FunkoItem) {
+  return [
+    normalizeCollectionToken(item.upc),
+    normalizeCollectionToken(item.franchise),
+    normalizeCollectionToken(item.name),
+    normalizeCollectionToken(item.boxNumber),
+    normalizeCollectionToken(item.variant),
+    normalizeCollectionToken(item.sticker)
+  ].join('|');
+}
+
+export function findMatchingCollectionEntry(entries: CollectionEntry[], item: FunkoItem) {
+  const itemKey = collectionItemKey(item);
+  const itemUpc = normalizeCollectionToken(item.upc);
+
+  return entries.find((entry) => {
+    const entryUpc = normalizeCollectionToken(entry.item.upc);
+    return Boolean(itemUpc && entryUpc && itemUpc === entryUpc) || collectionItemKey(entry.item) === itemKey;
+  });
 }
 
 export class CollectionService {

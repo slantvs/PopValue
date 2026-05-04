@@ -13,8 +13,12 @@ import type {
 } from './types';
 import { authService } from './services/authService';
 import { cloudCollectionService } from './services/cloudCollectionService';
-import { collectionService } from './services/collectionService';
-import { parseCollectionExport } from './services/collectionService';
+import {
+  collectionItemKey,
+  collectionService,
+  findMatchingCollectionEntry,
+  parseCollectionExport
+} from './services/collectionService';
 import { ebayService } from './services/ebayService';
 import { identifyService } from './services/identifyService';
 import { enrichItemImageFromListings } from './services/itemImageService';
@@ -35,6 +39,40 @@ const emptyManual: ManualSearchFields = {
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
 
+const fallbackImageUrl = 'https://placehold.co/600x800/111827/f8fafc?text=PopValue';
+const conditionLabels: Record<Condition, string> = {
+  mint: 'Mint',
+  good: 'Good',
+  damaged: 'Damaged',
+  'out of box': 'Out of box'
+};
+
+type CollectionSort = 'saved-desc' | 'saved-asc' | 'value-desc' | 'value-asc' | 'name-asc' | 'franchise-asc';
+type CollectionViewMode = 'cards' | 'compact';
+
+const sortLabels: Record<CollectionSort, string> = {
+  'saved-desc': 'Newest saved',
+  'saved-asc': 'Oldest saved',
+  'value-desc': 'Highest value',
+  'value-asc': 'Lowest value',
+  'name-asc': 'Name A-Z',
+  'franchise-asc': 'Franchise A-Z'
+};
+
+const getPublicProfileHandleFromLocation = () => {
+  const queryHandle = new URLSearchParams(window.location.search).get('profile');
+  if (queryHandle) return queryHandle;
+
+  const [section, handle] = window.location.pathname.split('/').filter(Boolean);
+  return ['u', 'profile'].includes(section ?? '') ? handle : null;
+};
+
+const publicProfilePath = (handle: string) => `/u/${handle}`;
+
+const fallbackImage = (event: { currentTarget: HTMLImageElement }) => {
+  if (event.currentTarget.src !== fallbackImageUrl) event.currentTarget.src = fallbackImageUrl;
+};
+
 function App() {
   const [manual, setManual] = useState<ManualSearchFields>(emptyManual);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
@@ -51,6 +89,9 @@ function App() {
   const [localCollectionCount, setLocalCollectionCount] = useState(() => collectionService.list().length);
   const [profileDetails, setProfileDetails] = useState<PublicProfile | null>(null);
   const [profileHandle, setProfileHandle] = useState('');
+  const [profileDisplayName, setProfileDisplayName] = useState('');
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState('');
+  const [profileBio, setProfileBio] = useState('');
   const [profilePublic, setProfilePublic] = useState(true);
   const [profileLookup, setProfileLookup] = useState('');
   const [publicProfile, setPublicProfile] = useState<PublicProfile | null>(null);
@@ -75,8 +116,12 @@ function App() {
     [publicCollection]
   );
   const profileShareUrl = profileDetails?.username
-    ? `${window.location.origin}${window.location.pathname}?profile=${profileDetails.username}`
+    ? `${window.location.origin}${publicProfilePath(profileDetails.username)}`
     : '';
+  const duplicateEntry = useMemo(
+    () => (selectedItem ? findMatchingCollectionEntry(collection, selectedItem) : undefined),
+    [collection, selectedItem]
+  );
 
   useEffect(() => {
     return () => {
@@ -110,6 +155,9 @@ function App() {
       setCollection(collectionService.list());
       setProfileDetails(null);
       setProfileHandle('');
+      setProfileDisplayName('');
+      setProfileAvatarUrl('');
+      setProfileBio('');
       setProfilePublic(true);
       setLocalCollectionCount(collectionService.list().length);
       return () => {
@@ -128,6 +176,9 @@ function App() {
         setCollection(entries);
         setProfileDetails(profile);
         setProfileHandle(profile?.username ?? '');
+        setProfileDisplayName(profile?.displayName ?? '');
+        setProfileAvatarUrl(profile?.avatarUrl ?? '');
+        setProfileBio(profile?.bio ?? '');
         setProfilePublic(profile?.collectionPublic ?? true);
         setLocalCollectionCount(collectionService.list().length);
         if (profileResult.status === 'rejected') {
@@ -150,7 +201,7 @@ function App() {
   useEffect(() => {
     if (!authService.configured) return;
 
-    const handle = new URLSearchParams(window.location.search).get('profile');
+    const handle = getPublicProfileHandleFromLocation();
     if (!handle) return;
 
     setProfileLookup(handle);
@@ -317,26 +368,37 @@ function App() {
   async function saveToCollection() {
     if (!selectedItem || !valuation) return;
 
+    const existingEntry = findMatchingCollectionEntry(collection, selectedItem);
+    if (
+      existingEntry &&
+      !window.confirm(
+        'This Pop already exists in your collection. Update the existing saved entry with the latest estimate?'
+      )
+    ) {
+      return;
+    }
+
     const entry: CollectionEntry = {
-      id: `${selectedItem.id}-${Date.now()}`,
+      id: existingEntry?.id ?? `${selectedItem.id}-${Date.now()}`,
       item: { ...selectedItem, condition },
       valuation,
       condition,
-      notes,
-      purchasePrice: purchasePrice ? Number(purchasePrice) : undefined,
-      savedAt: new Date().toISOString()
+      notes: notes.trim() || existingEntry?.notes || '',
+      purchasePrice: purchasePrice ? Number(purchasePrice) : existingEntry?.purchasePrice,
+      savedAt: existingEntry?.savedAt ?? new Date().toISOString()
     };
 
     try {
       if (profileUser) {
         setCollection(await cloudCollectionService.save(profileUser.id, entry));
-        setAuthMessage('Saved to your profile.');
+        setAuthMessage(existingEntry ? 'Updated the existing Pop in your profile.' : 'Saved to your profile.');
       } else {
         setCollection(collectionService.save(entry));
         setLocalCollectionCount(collectionService.list().length);
       }
+      setError('');
     } catch {
-      setError('Could not save that Pop to your profile. Try again.');
+      setError('Could not save that Pop to your collection. Try again.');
     }
 
     setNotes('');
@@ -467,11 +529,17 @@ function App() {
     try {
       const profile = await cloudCollectionService.saveProfile(profileUser.id, {
         username: profileHandle,
+        displayName: profileDisplayName,
+        avatarUrl: profileAvatarUrl,
+        bio: profileBio,
         collectionPublic: profilePublic
       });
 
       setProfileDetails(profile);
       setProfileHandle(profile?.username ?? '');
+      setProfileDisplayName(profile?.displayName ?? profileDisplayName.trim());
+      setProfileAvatarUrl(profile?.avatarUrl ?? '');
+      setProfileBio(profile?.bio ?? '');
       setAuthMessage(profile?.collectionPublic ? 'Public profile saved.' : 'Profile saved. Public lookup is off.');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Try another profile name.';
@@ -499,6 +567,8 @@ function App() {
 
       setPublicProfile(result.profile);
       setPublicCollection(result.entries);
+      setProfileLookup(result.profile.username);
+      window.history.replaceState(null, '', publicProfilePath(result.profile.username));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Try again.';
       setPublicLookupError(`Could not load that public collection. ${message}`);
@@ -519,11 +589,7 @@ function App() {
     setPublicLookupError('');
     setPublicLookupLoading('');
 
-    const url = new URL(window.location.href);
-    if (url.searchParams.has('profile')) {
-      url.searchParams.delete('profile');
-      window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
-    }
+    if (getPublicProfileHandleFromLocation()) window.history.replaceState(null, '', '/');
   }
 
   return (
@@ -561,7 +627,7 @@ function App() {
             ) : (
               <div>
                 <strong>Open camera or upload photo</strong>
-                <span>Reads UPC/EAN barcodes from camera-captured or uploaded images.</span>
+                <span>Use a straight, well-lit UPC/EAN barcode photo for the fastest match.</span>
               </div>
             )}
           </label>
@@ -572,6 +638,15 @@ function App() {
             playsInline
             ref={videoRef}
           />
+          {cameraActive && (
+            <div className="scanner-guidance" aria-live="polite">
+              <span className="scanner-frame" />
+              <div>
+                <strong>Center the UPC barcode</strong>
+                <small>Hold steady, fill the frame, and use a well-lit box edge.</small>
+              </div>
+            </div>
+          )}
           <div className="scan-actions">
             <button className="secondary-button" onClick={cameraActive ? stopCameraScan : startCameraScan} type="button">
               {cameraActive ? 'Stop Camera' : 'Scan Barcode'}
@@ -638,7 +713,7 @@ function App() {
                   onClick={() => lookupItem(candidate.item)}
                   type="button"
                 >
-                  <img src={candidate.item.imageUrl} alt={candidate.item.name} />
+                  <FigureImage src={candidate.item.imageUrl} alt={candidate.item.name} />
                   <span>
                     <strong>
                       {candidate.item.name} {candidate.item.boxNumber ? `#${candidate.item.boxNumber}` : ''}
@@ -660,6 +735,7 @@ function App() {
         <div className="results-stack">
           <ResultsPanel
             condition={condition}
+            duplicateEntry={duplicateEntry}
             onConditionChange={setCondition}
             onSave={saveToCollection}
             purchasePrice={purchasePrice}
@@ -694,6 +770,9 @@ function App() {
           onExport={exportCollection}
           onImport={importCollection}
           onMoveLocalCollection={moveLocalCollectionToProfile}
+          onProfileAvatarUrlChange={setProfileAvatarUrl}
+          onProfileBioChange={setProfileBio}
+          onProfileDisplayNameChange={setProfileDisplayName}
           onProfileHandleChange={setProfileHandle}
           onProfilePublicChange={setProfilePublic}
           onPublicLookupChange={setProfileLookup}
@@ -704,6 +783,9 @@ function App() {
           onSignOut={signOutProfile}
           onToggleCollection={() => setCollectionOpen((current) => !current)}
           profileDetails={profileDetails}
+          profileAvatarUrl={profileAvatarUrl}
+          profileBio={profileBio}
+          profileDisplayName={profileDisplayName}
           profileHandle={profileHandle}
           profilePublic={profilePublic}
           profileShareUrl={profileShareUrl}
@@ -736,6 +818,7 @@ function EmptyState({ title, body }: { title: string; body: string }) {
 
 function ResultsPanel({
   condition,
+  duplicateEntry,
   onConditionChange,
   onSave,
   purchasePrice,
@@ -748,6 +831,7 @@ function ResultsPanel({
   valuation
 }: {
   condition: Condition;
+  duplicateEntry?: CollectionEntry;
   onConditionChange: (condition: Condition) => void;
   onSave: () => void;
   purchasePrice: string;
@@ -772,7 +856,7 @@ function ResultsPanel({
       {selectedItem && valuation ? (
         <>
           <div className="product-hero">
-            <img src={selectedItem.imageUrl} alt={selectedItem.name} />
+            <FigureImage src={selectedItem.imageUrl} alt={selectedItem.name} />
             <div>
               <h3>
                 {selectedItem.name} {selectedItem.boxNumber ? `#${selectedItem.boxNumber}` : ''}
@@ -808,6 +892,8 @@ function ResultsPanel({
             <Metric label="Samples" value={`${valuation.activeSampleSize} active / ${valuation.soldSampleSize} sold`} />
           </div>
 
+          <ValuationTrustPanel valuation={valuation} />
+
           <div className="disclaimer">
             Prices are estimates. Condition, stickers, exclusives, and rarity affect value.
           </div>
@@ -823,7 +909,7 @@ function ResultsPanel({
             <div className="listing-list">
               {valuation.listingsUsed.map((listing) => (
                 <a className="listing" href={listing.url} key={listing.id} rel="noreferrer" target="_blank">
-                  <img src={listing.imageUrl || selectedItem.imageUrl} alt="" />
+                  <FigureImage src={listing.imageUrl || selectedItem.imageUrl} alt="" />
                   <span>
                     <strong>{listing.title}</strong>
                     <small>
@@ -853,6 +939,12 @@ function ResultsPanel({
 
           <div className="save-card">
             <h3>Save to My Collection</h3>
+            {duplicateEntry && (
+              <div className="note">
+                Already saved on {new Date(duplicateEntry.savedAt).toLocaleDateString()}. Saving will offer to update
+                the existing entry.
+              </div>
+            )}
             <div className="field-row">
               <label>
                 Condition
@@ -878,7 +970,7 @@ function ResultsPanel({
               <textarea onChange={(event) => setNotes(event.target.value)} value={notes} />
             </label>
             <button className="primary-button" onClick={onSave} type="button">
-              Add to Collection
+              {duplicateEntry ? 'Update Saved Pop' : 'Add to Collection'}
             </button>
           </div>
         </>
@@ -886,6 +978,25 @@ function ResultsPanel({
         <EmptyState title="No valuation yet" body="Choose a match to calculate an Estimated Value from listings." />
       )}
     </section>
+  );
+}
+
+function ValuationTrustPanel({ valuation }: { valuation: ValuationResult }) {
+  const excludedCount = valuation.excludedListingCount ?? 0;
+  const relevantCount = valuation.relevantListingCount ?? valuation.activeSampleSize + valuation.soldSampleSize;
+
+  return (
+    <div className="trust-panel">
+      <div>
+        <strong>Estimate quality</strong>
+        <span>{valuation.basis === 'sold comps' ? 'Prioritizes completed sale data.' : 'Uses active asking prices until enough sold comps are available.'}</span>
+      </div>
+      <div className="trust-grid">
+        <Metric label="Relevant listings" value={`${relevantCount}`} />
+        <Metric label="Filtered out" value={`${excludedCount}`} />
+        <Metric label="Range buffer" value="12%" />
+      </div>
+    </div>
   );
 }
 
@@ -898,6 +1009,41 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
+function FigureImage({ alt, src }: { alt: string; src?: string }) {
+  return (
+    <img
+      alt={alt}
+      loading="lazy"
+      onError={fallbackImage}
+      referrerPolicy="no-referrer"
+      src={src || fallbackImageUrl}
+    />
+  );
+}
+
+function ProfileAvatar({ profile }: { profile: Partial<PublicProfile> | null }) {
+  const label = profile?.displayName || profile?.username || 'Profile';
+  const initials = label
+    .split(/\s+|-/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
+
+  return profile?.avatarUrl ? (
+    <img
+      alt={label}
+      className="profile-avatar"
+      loading="lazy"
+      onError={fallbackImage}
+      referrerPolicy="no-referrer"
+      src={profile.avatarUrl}
+    />
+  ) : (
+    <span className="profile-avatar">{initials || '@'}</span>
+  );
+}
+
 function ProfileCard({
   authEmail,
   authError,
@@ -907,12 +1053,18 @@ function ProfileCard({
   localCollectionCount,
   onAuthEmailChange,
   onMoveLocalCollection,
+  onProfileAvatarUrlChange,
+  onProfileBioChange,
+  onProfileDisplayNameChange,
   onProfileHandleChange,
   onProfilePublicChange,
   onSavePublicProfile,
   onSignIn,
   onSignOut,
   profileDetails,
+  profileAvatarUrl,
+  profileBio,
+  profileDisplayName,
   profileHandle,
   profilePublic,
   profileShareUrl,
@@ -926,12 +1078,18 @@ function ProfileCard({
   localCollectionCount: number;
   onAuthEmailChange: (email: string) => void;
   onMoveLocalCollection: () => void;
+  onProfileAvatarUrlChange: (url: string) => void;
+  onProfileBioChange: (bio: string) => void;
+  onProfileDisplayNameChange: (name: string) => void;
   onProfileHandleChange: (handle: string) => void;
   onProfilePublicChange: (isPublic: boolean) => void;
   onSavePublicProfile: (event: FormEvent) => void;
   onSignIn: (event: FormEvent) => void;
   onSignOut: () => void;
   profileDetails: PublicProfile | null;
+  profileAvatarUrl: string;
+  profileBio: string;
+  profileDisplayName: string;
   profileHandle: string;
   profilePublic: boolean;
   profileShareUrl: string;
@@ -955,8 +1113,30 @@ function ProfileCard({
         <p>Add Supabase env vars to enable profile-synced collections.</p>
       ) : profileUser ? (
         <>
+          <div className="profile-identity">
+            <ProfileAvatar
+              profile={{
+                avatarUrl: profileAvatarUrl,
+                displayName: profileDisplayName,
+                username: profileDetails?.username ?? profileHandle
+              }}
+            />
+            <div>
+              <strong>{profileDisplayName.trim() || profileDetails?.username || 'Your public profile'}</strong>
+              <span>@{profileDetails?.username ?? (profileHandle || 'profile-name')}</span>
+            </div>
+          </div>
           <p>Saved Pops sync to this profile across devices.</p>
           <form className="profile-handle-form" onSubmit={onSavePublicProfile}>
+            <label>
+              Display name
+              <input
+                autoComplete="name"
+                onChange={(event) => onProfileDisplayNameChange(event.target.value)}
+                placeholder="Bradley's Pops"
+                value={profileDisplayName}
+              />
+            </label>
             <label>
               Public profile name
               <input
@@ -964,6 +1144,25 @@ function ProfileCard({
                 onChange={(event) => onProfileHandleChange(event.target.value)}
                 placeholder="bradley-pops"
                 value={profileHandle}
+              />
+            </label>
+            <label>
+              Avatar image URL
+              <input
+                autoComplete="url"
+                inputMode="url"
+                onChange={(event) => onProfileAvatarUrlChange(event.target.value)}
+                placeholder="https://..."
+                value={profileAvatarUrl}
+              />
+            </label>
+            <label>
+              Bio
+              <textarea
+                maxLength={180}
+                onChange={(event) => onProfileBioChange(event.target.value)}
+                placeholder="Anime, Marvel, grails, chases..."
+                value={profileBio}
               />
             </label>
             <label className="profile-toggle">
@@ -1073,16 +1272,23 @@ function PublicCollectionLookup({
       {publicProfile && (
         <div className="public-collection">
           <div className="public-collection-heading">
-            <strong>@{publicProfile.username}</strong>
+            <div className="profile-identity">
+              <ProfileAvatar profile={publicProfile} />
+              <div>
+                <strong>{publicProfile.displayName || `@${publicProfile.username}`}</strong>
+                <span>@{publicProfile.username}</span>
+              </div>
+            </div>
             <span>
               {formatCurrency(publicCollectionValue)} - {publicCollection.length} saved
             </span>
+            {publicProfile.bio && <small>{publicProfile.bio}</small>}
           </div>
           {publicCollection.length ? (
             <div className="public-collection-list">
               {publicCollection.map((entry) => (
                 <article className="public-entry" key={entry.id}>
-                  <img src={entry.item.imageUrl} alt={entry.item.name} />
+                  <FigureImage src={entry.item.imageUrl} alt={entry.item.name} />
                   <span>
                     <strong>
                       {entry.item.name} {entry.item.boxNumber ? `#${entry.item.boxNumber}` : ''}
@@ -1114,6 +1320,9 @@ function CollectionPanel({
   onExport,
   onImport,
   onMoveLocalCollection,
+  onProfileAvatarUrlChange,
+  onProfileBioChange,
+  onProfileDisplayNameChange,
   onProfileHandleChange,
   onProfilePublicChange,
   onPublicLookupChange,
@@ -1124,6 +1333,9 @@ function CollectionPanel({
   onSignOut,
   onToggleCollection,
   profileDetails,
+  profileAvatarUrl,
+  profileBio,
+  profileDisplayName,
   profileHandle,
   profilePublic,
   profileShareUrl,
@@ -1148,6 +1360,9 @@ function CollectionPanel({
   onExport: () => void;
   onImport: (file: File) => void;
   onMoveLocalCollection: () => void;
+  onProfileAvatarUrlChange: (url: string) => void;
+  onProfileBioChange: (bio: string) => void;
+  onProfileDisplayNameChange: (name: string) => void;
   onProfileHandleChange: (handle: string) => void;
   onProfilePublicChange: (isPublic: boolean) => void;
   onPublicLookupChange: (handle: string) => void;
@@ -1158,6 +1373,9 @@ function CollectionPanel({
   onSignOut: () => void;
   onToggleCollection: () => void;
   profileDetails: PublicProfile | null;
+  profileAvatarUrl: string;
+  profileBio: string;
+  profileDisplayName: string;
   profileHandle: string;
   profilePublic: boolean;
   profileShareUrl: string;
@@ -1189,12 +1407,18 @@ function CollectionPanel({
         localCollectionCount={localCollectionCount}
         onAuthEmailChange={onAuthEmailChange}
         onMoveLocalCollection={onMoveLocalCollection}
+        onProfileAvatarUrlChange={onProfileAvatarUrlChange}
+        onProfileBioChange={onProfileBioChange}
+        onProfileDisplayNameChange={onProfileDisplayNameChange}
         onProfileHandleChange={onProfileHandleChange}
         onProfilePublicChange={onProfilePublicChange}
         onSavePublicProfile={onSavePublicProfile}
         onSignIn={onSignIn}
         onSignOut={onSignOut}
         profileDetails={profileDetails}
+        profileAvatarUrl={profileAvatarUrl}
+        profileBio={profileBio}
+        profileDisplayName={profileDisplayName}
         profileHandle={profileHandle}
         profilePublic={profilePublic}
         profileShareUrl={profileShareUrl}
@@ -1258,6 +1482,55 @@ function CollectionModal({
   onUpdate: (id: string, patch: Partial<CollectionEntry>) => void;
   total: number;
 }) {
+  const [query, setQuery] = useState('');
+  const [conditionFilter, setConditionFilter] = useState<Condition | 'all'>('all');
+  const [franchiseFilter, setFranchiseFilter] = useState('all');
+  const [sort, setSort] = useState<CollectionSort>('saved-desc');
+  const [viewMode, setViewMode] = useState<CollectionViewMode>('cards');
+
+  const franchises = useMemo(
+    () =>
+      Array.from(new Set(collection.map((entry) => entry.item.franchise).filter(Boolean))).sort((a, b) =>
+        a.localeCompare(b)
+      ),
+    [collection]
+  );
+
+  const visibleCollection = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    const filtered = collection.filter((entry) => {
+      const searchable = [
+        entry.item.name,
+        entry.item.franchise,
+        entry.item.series,
+        entry.item.boxNumber,
+        entry.item.variant,
+        entry.item.sticker,
+        entry.item.upc,
+        entry.notes,
+        collectionItemKey(entry.item)
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return (
+        (!normalizedQuery || searchable.includes(normalizedQuery)) &&
+        (conditionFilter === 'all' || entry.condition === conditionFilter) &&
+        (franchiseFilter === 'all' || entry.item.franchise === franchiseFilter)
+      );
+    });
+
+    return [...filtered].sort((a, b) => {
+      if (sort === 'saved-desc') return new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime();
+      if (sort === 'saved-asc') return new Date(a.savedAt).getTime() - new Date(b.savedAt).getTime();
+      if (sort === 'value-desc') return b.valuation.medianPrice - a.valuation.medianPrice;
+      if (sort === 'value-asc') return a.valuation.medianPrice - b.valuation.medianPrice;
+      if (sort === 'franchise-asc') return a.item.franchise.localeCompare(b.item.franchise);
+      return a.item.name.localeCompare(b.item.name);
+    });
+  }, [collection, conditionFilter, franchiseFilter, query, sort]);
+
   return (
     <section aria-labelledby="collection-modal-title" className="collection-modal" role="region">
       <div className="modal-heading">
@@ -1265,7 +1538,7 @@ function CollectionModal({
           <p className="eyebrow">My Collection</p>
           <h2 id="collection-modal-title">{formatCurrency(total)}</h2>
           <small>
-            {collection.length} saved Pop{collection.length === 1 ? '' : 's'}
+            {visibleCollection.length} shown / {collection.length} saved Pop{collection.length === 1 ? '' : 's'}
           </small>
         </div>
         <button className="secondary-button compact" onClick={onClose} type="button">
@@ -1273,15 +1546,125 @@ function CollectionModal({
         </button>
       </div>
 
-      <div className="collection-grid modal-collection-grid">
-        {collection.map((entry) => (
-          <article className="collection-card" key={entry.id}>
-            <img src={entry.item.imageUrl} alt={entry.item.name} />
-            <div>
-              <div className="collection-card-header">
-                <h3>
-                  {entry.item.name} {entry.item.boxNumber ? `#${entry.item.boxNumber}` : ''}
-                </h3>
+      <div className="collection-toolbar">
+        <input
+          aria-label="Search collection"
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search collection"
+          value={query}
+        />
+        <select
+          aria-label="Filter by condition"
+          onChange={(event) => setConditionFilter(event.target.value as Condition | 'all')}
+          value={conditionFilter}
+        >
+          <option value="all">All conditions</option>
+          {Object.entries(conditionLabels).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Filter by franchise"
+          onChange={(event) => setFranchiseFilter(event.target.value)}
+          value={franchiseFilter}
+        >
+          <option value="all">All franchises</option>
+          {franchises.map((franchise) => (
+            <option key={franchise} value={franchise}>
+              {franchise}
+            </option>
+          ))}
+        </select>
+        <select aria-label="Sort collection" onChange={(event) => setSort(event.target.value as CollectionSort)} value={sort}>
+          {Object.entries(sortLabels).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <div className="segmented-control" aria-label="Collection view mode">
+          <button
+            className={viewMode === 'cards' ? 'active' : ''}
+            onClick={() => setViewMode('cards')}
+            type="button"
+          >
+            Cards
+          </button>
+          <button
+            className={viewMode === 'compact' ? 'active' : ''}
+            onClick={() => setViewMode('compact')}
+            type="button"
+          >
+            Compact
+          </button>
+        </div>
+      </div>
+
+      {visibleCollection.length ? (
+        viewMode === 'cards' ? (
+          <div className="collection-grid modal-collection-grid">
+            {visibleCollection.map((entry) => (
+              <article className="collection-card" key={entry.id}>
+                <FigureImage src={entry.item.imageUrl} alt={entry.item.name} />
+                <div>
+                  <div className="collection-card-header">
+                    <h3>
+                      {entry.item.name} {entry.item.boxNumber ? `#${entry.item.boxNumber}` : ''}
+                    </h3>
+                    <button
+                      aria-label={`Remove ${entry.item.name} from collection`}
+                      className="remove-button"
+                      onClick={() => onRemove(entry)}
+                      type="button"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <p>{formatCurrency(entry.valuation.medianPrice)} estimated median</p>
+                  <select
+                    value={entry.condition}
+                    onChange={(event) => onUpdate(entry.id, { condition: event.target.value as Condition })}
+                  >
+                    {Object.entries(conditionLabels).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <textarea
+                    onBlur={(event) => onUpdate(entry.id, { notes: event.target.value })}
+                    placeholder="Notes"
+                    defaultValue={entry.notes}
+                  />
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="collection-compact-list modal-collection-grid">
+            {visibleCollection.map((entry) => (
+              <article className="collection-compact-entry" key={entry.id}>
+                <FigureImage src={entry.item.imageUrl} alt={entry.item.name} />
+                <div>
+                  <strong>
+                    {entry.item.name} {entry.item.boxNumber ? `#${entry.item.boxNumber}` : ''}
+                  </strong>
+                  <small>
+                    {entry.item.franchise} - {formatCurrency(entry.valuation.medianPrice)} - {conditionLabels[entry.condition]}
+                  </small>
+                </div>
+                <select
+                  value={entry.condition}
+                  onChange={(event) => onUpdate(entry.id, { condition: event.target.value as Condition })}
+                >
+                  {Object.entries(conditionLabels).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
                 <button
                   aria-label={`Remove ${entry.item.name} from collection`}
                   className="remove-button"
@@ -1290,26 +1673,13 @@ function CollectionModal({
                 >
                   Remove
                 </button>
-              </div>
-              <p>{formatCurrency(entry.valuation.medianPrice)} estimated median</p>
-              <select
-                value={entry.condition}
-                onChange={(event) => onUpdate(entry.id, { condition: event.target.value as Condition })}
-              >
-                <option value="mint">Mint</option>
-                <option value="good">Good</option>
-                <option value="damaged">Damaged</option>
-                <option value="out of box">Out of box</option>
-              </select>
-              <textarea
-                onBlur={(event) => onUpdate(entry.id, { notes: event.target.value })}
-                placeholder="Notes"
-                defaultValue={entry.notes}
-              />
-            </div>
-          </article>
-        ))}
-      </div>
+              </article>
+            ))}
+          </div>
+        )
+      ) : (
+        <EmptyState title="No saved Pops match" body="Clear filters or search another name, number, or franchise." />
+      )}
     </section>
   );
 }

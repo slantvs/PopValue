@@ -4,8 +4,11 @@ const totalPrice = (listing: EbayListing) => listing.price + listing.shipping;
 
 export class ValuationService {
   estimate(item: FunkoItem, activeListings: EbayListing[], soldListings: EbayListing[] = []): ValuationResult {
-    const relevantActive = this.removeOutliers(this.filterRelevantListings(item, activeListings));
-    const relevantSold = this.removeOutliers(this.filterRelevantListings(item, soldListings));
+    const filteredActive = this.filterRelevantListings(item, activeListings);
+    const filteredSold = this.filterRelevantListings(item, soldListings);
+    const relevantActive = this.removeOutliers(filteredActive);
+    const relevantSold = this.removeOutliers(filteredSold);
+    const outlierExcludedCount = filteredActive.length + filteredSold.length - relevantActive.length - relevantSold.length;
     const basisListings = relevantSold.length >= 3 ? relevantSold : relevantActive;
     const basis: ValuationResult['basis'] = relevantSold.length >= 3 ? 'sold comps' : 'active listings';
     const trimmed = basisListings;
@@ -31,8 +34,11 @@ export class ValuationService {
       sampleSize: trimmed.length,
       activeSampleSize: relevantActive.length,
       soldSampleSize: relevantSold.length,
+      relevantListingCount: relevantActive.length + relevantSold.length,
+      excludedListingCount:
+        activeListings.length + soldListings.length - relevantActive.length - relevantSold.length,
       basis,
-      notes: this.notes(trimmed.length, confidence, basis, relevantSold.length)
+      notes: this.notes(trimmed.length, confidence, basis, relevantSold.length, outlierExcludedCount)
     };
   }
 
@@ -96,12 +102,19 @@ export class ValuationService {
     return 'low';
   }
 
-  private notes(sampleSize: number, confidence: ConfidenceLevel, basis: ValuationResult['basis'], soldSampleSize: number) {
+  private notes(
+    sampleSize: number,
+    confidence: ConfidenceLevel,
+    basis: ValuationResult['basis'],
+    soldSampleSize: number,
+    outlierExcludedCount: number
+  ) {
     const notes = [
       basis === 'sold comps'
         ? 'Estimated Value is based primarily on sold comps from available sales history.'
         : 'Estimated Value is based on active listing asking prices, not guaranteed sale prices.'
     ];
+    if (outlierExcludedCount > 0) notes.push('Potential outlier prices were excluded from the estimate.');
     if (soldSampleSize > 0 && soldSampleSize < 3) notes.push('Sold comp sample is too small, so active listings are still the primary basis.');
     if (sampleSize < 4) notes.push('Small listing sample. Treat this as a directional estimate.');
     if (confidence === 'low') notes.push('Low confidence match. Review possible variants, stickers, and box condition.');

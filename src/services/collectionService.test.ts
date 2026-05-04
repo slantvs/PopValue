@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CollectionService } from './collectionService';
+import { CollectionService, collectionItemKey, findMatchingCollectionEntry } from './collectionService';
 import type { CollectionEntry, FunkoItem, ValuationResult } from '../types';
 
 const item: FunkoItem = {
@@ -94,5 +94,25 @@ describe('CollectionService', () => {
     expect(next).toHaveLength(1);
     expect(next[0].id).toBe('entry-2');
     expect(service.list()).toHaveLength(1);
+  });
+
+  it('detects duplicate saved Pops by normalized UPC or item identity', () => {
+    const existing = entry({ id: 'entry-1' });
+    const duplicateByUpc = {
+      ...item,
+      id: 'another-id',
+      name: 'Batman Different Title'
+    };
+    const duplicateByIdentity = {
+      ...item,
+      id: 'manual-entry',
+      upc: undefined
+    };
+
+    expect(collectionItemKey(item)).toContain('batman');
+    expect(findMatchingCollectionEntry([existing], duplicateByUpc)?.id).toBe('entry-1');
+    expect(findMatchingCollectionEntry([entry({ item: { ...item, upc: undefined } })], duplicateByIdentity)?.id).toBe(
+      'entry-1'
+    );
   });
 });

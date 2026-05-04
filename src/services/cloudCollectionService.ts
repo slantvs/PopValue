@@ -5,6 +5,8 @@ interface ProfileRow {
   id: string;
   username: string | null;
   display_name: string | null;
+  avatar_url?: string | null;
+  bio?: string | null;
   collection_public: boolean | null;
 }
 
@@ -28,12 +30,39 @@ export const normalizePublicHandle = (value: string) =>
     .replace(/^-+|-+$/g, '')
     .slice(0, 30);
 
+const cleanProfileText = (value: string | undefined, maxLength: number) => {
+  const trimmed = (value ?? '').trim().replace(/\s+/g, ' ');
+  return trimmed ? trimmed.slice(0, maxLength) : null;
+};
+
+const cleanProfileUrl = (value: string | undefined) => {
+  const trimmed = (value ?? '').trim();
+  if (!trimmed) return null;
+
+  try {
+    const url = new URL(trimmed);
+    return ['http:', 'https:'].includes(url.protocol) ? url.toString().slice(0, 300) : null;
+  } catch {
+    return null;
+  }
+};
+
+const profileSelect = 'id, username, display_name, avatar_url, bio, collection_public';
+const legacyProfileSelect = 'id, username, display_name, collection_public';
+
+const isMissingProfileColumnError = (error: { code?: string; message?: string }) =>
+  error.code === 'PGRST204' ||
+  error.code === '42703' ||
+  /avatar_url|bio|column/i.test(error.message ?? '');
+
 const toProfile = (row: ProfileRow): PublicProfile | null =>
   row.username
     ? {
         id: row.id,
         username: row.username,
         displayName: row.display_name ?? undefined,
+        avatarUrl: row.avatar_url ?? undefined,
+        bio: row.bio ?? undefined,
         collectionPublic: row.collection_public ?? true
       }
     : null;
@@ -63,34 +92,77 @@ export class CloudCollectionService {
   async getProfile(userId: string): Promise<PublicProfile | null> {
     if (!supabase) return null;
 
-    const { data, error } = await supabase
+    const initial = await supabase
       .from('profiles')
-      .select('id, username, display_name, collection_public')
+      .select(profileSelect)
       .eq('id', userId)
       .maybeSingle();
+    let data: unknown = initial.data;
+    let error = initial.error;
+
+    if (error && isMissingProfileColumnError(error)) {
+      const fallback = await supabase
+        .from('profiles')
+        .select(legacyProfileSelect)
+        .eq('id', userId)
+        .maybeSingle();
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) throw error;
     return data ? toProfile(data as ProfileRow) : null;
   }
 
-  async saveProfile(userId: string, options: { username: string; collectionPublic: boolean }) {
+  async saveProfile(
+    userId: string,
+    options: {
+      username: string;
+      displayName?: string;
+      avatarUrl?: string;
+      bio?: string;
+      collectionPublic: boolean;
+    }
+  ) {
     if (!supabase) return null;
 
     const username = normalizePublicHandle(options.username);
     if (username.length < 3) throw new Error('Handle must be at least 3 characters.');
 
-    const { data, error } = await supabase
+    const profilePayload = {
+      id: userId,
+      username,
+      display_name: cleanProfileText(options.displayName, 60),
+      avatar_url: cleanProfileUrl(options.avatarUrl),
+      bio: cleanProfileText(options.bio, 180),
+      collection_public: options.collectionPublic
+    };
+
+    const initial = await supabase
       .from('profiles')
-      .upsert(
-        {
-          id: userId,
-          username,
-          collection_public: options.collectionPublic
-        },
-        { onConflict: 'id' }
-      )
-      .select('id, username, display_name, collection_public')
+      .upsert(profilePayload, { onConflict: 'id' })
+      .select(profileSelect)
       .single();
+    let data: unknown = initial.data;
+    let error = initial.error;
+
+    if (error && isMissingProfileColumnError(error)) {
+      const fallback = await supabase
+        .from('profiles')
+        .upsert(
+          {
+            id: profilePayload.id,
+            username: profilePayload.username,
+            display_name: profilePayload.display_name,
+            collection_public: profilePayload.collection_public
+          },
+          { onConflict: 'id' }
+        )
+        .select(legacyProfileSelect)
+        .single();
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) {
       if (error.code === '23505') throw new Error('That profile name is already taken.');
@@ -106,12 +178,25 @@ export class CloudCollectionService {
     const handle = normalizePublicHandle(username);
     if (handle.length < 3) return null;
 
-    const { data, error } = await supabase
+    const initial = await supabase
       .from('profiles')
-      .select('id, username, display_name, collection_public')
+      .select(profileSelect)
       .eq('username', handle)
       .eq('collection_public', true)
       .maybeSingle();
+    let data: unknown = initial.data;
+    let error = initial.error;
+
+    if (error && isMissingProfileColumnError(error)) {
+      const fallback = await supabase
+        .from('profiles')
+        .select(legacyProfileSelect)
+        .eq('username', handle)
+        .eq('collection_public', true)
+        .maybeSingle();
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) throw error;
     return data ? toProfile(data as ProfileRow) : null;

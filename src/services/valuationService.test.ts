@@ -49,6 +49,8 @@ describe('ValuationService', () => {
     expect(result.soldMedianPrice).toBe(50);
     expect(result.activeMedianPrice).toBe(85);
     expect(result.listingsUsed.map((used) => used.id)).toEqual(['sold-1', 'sold-2', 'sold-3']);
+    expect(result.relevantListingCount).toBe(5);
+    expect(result.excludedListingCount).toBe(0);
   });
 
   it('filters irrelevant listings and removes extreme active-listing outliers', () => {
@@ -67,6 +69,7 @@ describe('ValuationService', () => {
     expect(result.basis).toBe('active listings');
     expect(result.medianPrice).toBe(21);
     expect(result.sampleSize).toBe(3);
+    expect(result.excludedListingCount).toBe(3);
     expect(result.listingsUsed.map((used) => used.id)).toEqual(['active-1', 'active-2', 'active-3']);
   });
 });

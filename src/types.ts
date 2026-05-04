@@ -79,6 +79,8 @@ export interface ValuationResult {
   sampleSize: number;
   activeSampleSize: number;
   soldSampleSize: number;
+  relevantListingCount?: number;
+  excludedListingCount?: number;
   basis: 'active listings' | 'sold comps';
   notes: string[];
 }
@@ -102,5 +104,7 @@ export interface PublicProfile {
   id: string;
   username: string;
   displayName?: string;
+  avatarUrl?: string;
+  bio?: string;
   collectionPublic: boolean;
 }
