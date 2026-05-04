@@ -47,6 +47,16 @@ describe('parseListingIdentity', () => {
       variant: 'Chase, Glow in the dark, Chalice Collectibles'
     });
   });
+
+  it('removes eBay catalog noise from Kaiju No. 8 UPC titles', () => {
+    expect(
+      parseListingIdentity('Funko POP! Anime: Kaiju No8 - Kikoru Shinomiya [New Toy] Vinyl Figure, Collect')
+    ).toMatchObject({
+      name: 'Kikoru Shinomiya',
+      franchise: 'Kaiju No. 8',
+      series: 'Animation'
+    });
+  });
 });
 
 describe('enrichItemIdentityFromListings', () => {
@@ -75,6 +85,21 @@ describe('enrichItemIdentityFromListings', () => {
       franchise: 'Manual Franchise',
       series: 'Manual Series',
       boxNumber: '1889'
+    });
+  });
+
+  it('merges box numbers from matching UPC listings', () => {
+    expect(
+      enrichItemIdentityFromListings(baseItem, [
+        listing('Funko POP! Anime: Kaiju No8 - Kikoru Shinomiya [New Toy] Vinyl Figure, Collect'),
+        listing('Funko Pop Kaiju No. 8 - Kikoru Shinomiya - Vinyl Figure - #2082'),
+        listing('Funko Pop Animation Kaiju No. 8 Kikoru Shinomiya Vinyl Figure NEW NIB')
+      ])
+    ).toMatchObject({
+      name: 'Kikoru Shinomiya',
+      franchise: 'Kaiju No. 8',
+      series: 'Animation',
+      boxNumber: '2082'
     });
   });
 });

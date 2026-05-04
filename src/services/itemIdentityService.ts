@@ -28,6 +28,7 @@ const lineMatchers: Array<{ pattern: RegExp; value: string }> = [
 const franchiseMatchers: Array<{ pattern: RegExp; value: string; series?: string }> = [
   { pattern: /\bjujutsu kaisen\b/i, value: 'Jujutsu Kaisen', series: 'Animation' },
   { pattern: /\bbleach\b/i, value: 'Bleach', series: 'Animation' },
+  { pattern: /\bkaiju\s*no\.?\s*8\b/i, value: 'Kaiju No. 8', series: 'Animation' },
   { pattern: /\bone piece\b/i, value: 'One Piece', series: 'Animation' },
   { pattern: /\bhunter\s*x\s*hunter\b/i, value: 'Hunter x Hunter', series: 'Animation' },
   { pattern: /\bmy hero academia\b/i, value: 'My Hero Academia', series: 'Animation' },
@@ -85,8 +86,9 @@ function cleanNoise(value: string) {
   return normalizeSpaces(
     value
       .replace(/\.{3,}/g, ' ')
+      .replace(/\[[^\]]*(?:collectible|good|new|toy|used|vinyl)[^\]]*\]/gi, ' ')
       .replace(/\([^)]*(?:animation|common|chase|exclusive|glow|protector|special edition)[^)]*\)/gi, ' ')
-      .replace(/\bfunko\b|\bpop!?\b|\bvinyl\b|\bfigure\b|\bcollectible\b/gi, ' ')
+      .replace(/\bfunko\b|\bpop!?\b|\bvinyl\b|\bfigure\b|\bcollectibles?\b|\bcollect\b|\btoys?\b/gi, ' ')
       .replace(/\bnew\b|\bnib\b|\bmint\b|\bbox\b|\bin hand\b|\bpre[- ]?order\b/gi, ' ')
       .replace(/\bw\/?\s*protector\b|\bwith protector\b|\bprotector included\b/gi, ' ')
       .replace(/\bcommon\b|\boob\b|\bout of box\b/gi, ' ')
@@ -146,6 +148,19 @@ function parseVinylColonTitle(title: string): ParsedItemIdentity | null {
   return name ? { name, franchise, series, boxNumber: extractBoxNumber(title), variant: extractVariant(title) } : null;
 }
 
+function parseKnownFranchiseDashTitle(title: string, franchise: string | undefined, series: string | undefined) {
+  if (!franchise) return null;
+
+  const segments = title
+    .split(/\s+-\s+/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  const franchiseIndex = segments.findIndex((segment) => findFirstMatch(segment, franchiseMatchers)?.value === franchise);
+  const name = franchiseIndex >= 0 ? cleanNameCandidate(segments[franchiseIndex + 1] ?? '', franchise, series) : undefined;
+
+  return name ? { name, franchise, series, boxNumber: extractBoxNumber(title), variant: extractVariant(title) } : null;
+}
+
 export function parseListingIdentity(title: string): ParsedItemIdentity | null {
   const normalizedTitle = normalizeSpaces(title);
   const franchiseMatch = findFirstMatch(normalizedTitle, franchiseMatchers);
@@ -161,6 +176,9 @@ export function parseListingIdentity(title: string): ParsedItemIdentity | null {
       series: explicitParsed.series || series
     };
   }
+
+  const franchiseDashParsed = parseKnownFranchiseDashTitle(normalizedTitle, franchise, series);
+  if (franchiseDashParsed) return franchiseDashParsed;
 
   const name = cleanNameCandidate(normalizedTitle, franchise, series);
   if (!name && !franchise && !series) return null;
@@ -185,6 +203,22 @@ function scoreIdentity(identity: ParsedItemIdentity, listing: EbayListing) {
   );
 }
 
+function normalizeIdentityValue(value: string | undefined) {
+  return normalizeSpaces((value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' '));
+}
+
+function isCompatibleIdentity(base: ParsedItemIdentity, next: ParsedItemIdentity) {
+  const baseName = normalizeIdentityValue(base.name);
+  const nextName = normalizeIdentityValue(next.name);
+  const baseFranchise = normalizeIdentityValue(base.franchise);
+  const nextFranchise = normalizeIdentityValue(next.franchise);
+
+  return (
+    (!baseName || !nextName || baseName === nextName) &&
+    (!baseFranchise || !nextFranchise || baseFranchise === nextFranchise)
+  );
+}
+
 function inferIdentityFromListings(listings: EbayListing[]) {
   const liveListings = listings.filter((listing) => listing.source === 'ebay');
   const candidates = (liveListings.length ? liveListings : listings)
@@ -192,7 +226,22 @@ function inferIdentityFromListings(listings: EbayListing[]) {
     .filter((candidate): candidate is { identity: ParsedItemIdentity; listing: EbayListing } => Boolean(candidate.identity))
     .sort((a, b) => scoreIdentity(b.identity, b.listing) - scoreIdentity(a.identity, a.listing));
 
-  return candidates[0]?.identity;
+  const best = candidates[0]?.identity;
+  if (!best) return undefined;
+
+  return candidates.slice(1).reduce(
+    (identity, candidate) =>
+      isCompatibleIdentity(identity, candidate.identity)
+        ? {
+            ...identity,
+            franchise: identity.franchise || candidate.identity.franchise,
+            series: identity.series || candidate.identity.series,
+            boxNumber: identity.boxNumber || candidate.identity.boxNumber,
+            variant: identity.variant || candidate.identity.variant
+          }
+        : identity,
+    { ...best }
+  );
 }
 
 const shouldFillText = (value: string | undefined) => !value || unknownPattern.test(value) || genericNamePattern.test(value);

@@ -90,9 +90,11 @@ export class ValuationService {
     const titleScore =
       listings.filter((listing) => {
         const title = listing.title.toLowerCase();
-        return title.includes(item.name.toLowerCase()) && (!item.boxNumber || title.includes(item.boxNumber));
+        const hasName = title.includes(item.name.toLowerCase());
+        const hasBoxNumber = !item.boxNumber || title.includes(item.boxNumber);
+        return hasName && (hasBoxNumber || Boolean(item.upc));
       }).length / Math.max(listings.length, 1);
-    const upcBoost = item.upc ? 0.1 : 0;
+    const upcBoost = item.upc ? 0.18 : 0;
     return Math.min(sampleScore + titleScore * 0.45 + upcBoost, 1);
   }
 

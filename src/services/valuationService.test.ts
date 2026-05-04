@@ -72,4 +72,32 @@ describe('ValuationService', () => {
     expect(result.excludedListingCount).toBe(3);
     expect(result.listingsUsed.map((used) => used.id)).toEqual(['active-1', 'active-2', 'active-3']);
   });
+
+  it('does not zero out UPC-matched listings when some titles omit the box number', () => {
+    const service = new ValuationService();
+    const kaijuItem: FunkoItem = {
+      id: 'barcode-889698867672',
+      upc: '889698867672',
+      name: 'Kikoru Shinomiya',
+      franchise: 'Kaiju No. 8',
+      series: 'Animation',
+      boxNumber: '2082',
+      condition: 'mint',
+      imageUrl: 'https://example.com/kikoru.jpg'
+    };
+    const active = [
+      listing('active-1', 'Funko POP! Anime: Kaiju No8 - Kikoru Shinomiya [New Toy] Vinyl Figure, Collect', 13.91),
+      listing('active-2', 'Funko Pop Kaiju No. 8 - Kikoru Shinomiya - Vinyl Figure - #2082', 16.01),
+      listing('active-3', 'Funko Pop Animation Kaiju No. 8 Kikoru Shinomiya Vinyl Figure NEW NIB', 9.99, 5.99),
+      listing('active-4', 'Funko Pop! Kaiju No. 8 Kikoru Shinomiya signed by Fairouz Ai w/ PSA Witness', 380),
+      listing('active-5', 'Funko POP! Anime: Kaiju No8 - Kikoru Shinomiya [Used Very Good Toy] Vinyl Figu', 12.02, 1.99)
+    ];
+
+    const result = service.estimate(kaijuItem, active);
+
+    expect(result.medianPrice).toBeCloseTo(14.995);
+    expect(result.sampleSize).toBe(4);
+    expect(result.confidence).toBe('high');
+    expect(result.excludedListingCount).toBe(1);
+  });
 });
