@@ -32,15 +32,17 @@ In Authentication settings:
 
 ## 4. Add Environment Variables
 
-In Vercel project settings, add these for Production:
+In Vercel project settings, add these for Production. If Supabase was installed through Vercel, these may already exist:
 
 ```bash
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-public-anon-key
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-public-publishable-key
 ```
 
 Use the base project URL only. Do not use the Data API REST endpoint ending in `/rest/v1`.
-Use the public anon key only. Do not use the service role key in PopValue frontend environment variables.
+Use a public publishable or anon key only. Do not use the service role key in PopValue frontend environment variables.
+
+PopValue also supports the older `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_SUPABASE_ANON_KEY` names, but the `NEXT_PUBLIC_SUPABASE_*` values are preferred when both are present.
 
 ## 5. Redeploy
 
@@ -51,7 +53,7 @@ Redeploy PopValue after adding the env vars. The Profile card will switch from s
 Signed-in users can claim a unique profile name in the app. Public profile links use:
 
 ```text
-https://popvalue.vercel.app/?profile=profile-name
+https://popvalue.vercel.app/u/profile-name
 ```
 
 If public lookup is disabled, other users cannot load that collection by handle.

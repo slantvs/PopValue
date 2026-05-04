@@ -74,6 +74,14 @@ const fallbackImage = (event: { currentTarget: HTMLImageElement }) => {
   if (event.currentTarget.src !== fallbackImageUrl) event.currentTarget.src = fallbackImageUrl;
 };
 
+const getErrorMessage = (error: unknown, fallback = 'Try again.') => {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+    return error.message;
+  }
+  return fallback;
+};
+
 function App() {
   const [manual, setManual] = useState<ManualSearchFields>(emptyManual);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
@@ -176,10 +184,13 @@ function App() {
       .then(([entriesResult, profileResult]) => {
         if (!active) return;
 
-        const entries = entriesResult.status === 'fulfilled' ? entriesResult.value : [];
         const profile = profileResult.status === 'fulfilled' ? profileResult.value : null;
 
-        setCollection(entries);
+        if (entriesResult.status === 'fulfilled') {
+          setCollection(entriesResult.value);
+        } else {
+          setAuthError(`Could not sync your profile collection. ${getErrorMessage(entriesResult.reason)}`);
+        }
         setProfileDetails(profile);
         setProfileHandle(profile?.username ?? '');
         setProfileDisplayName(profile?.displayName ?? '');
@@ -191,7 +202,13 @@ function App() {
         if (profileResult.status === 'rejected') {
           setAuthError('Run the latest Supabase schema to enable public profile handles.');
         }
-        setAuthMessage(entries.length ? 'Profile collection loaded.' : 'Profile ready. Saved Pops will sync here.');
+        setAuthMessage(
+          entriesResult.status === 'fulfilled'
+            ? entriesResult.value.length
+              ? 'Profile collection loaded.'
+              : 'Profile ready. Saved Pops will sync here.'
+            : 'Signed in. Collection sync needs attention.'
+        );
       })
       .catch(() => {
         if (active) setAuthError('Could not load your profile collection. Local collection is still available if you sign out.');
@@ -525,6 +542,24 @@ function App() {
     }
   }
 
+  async function refreshProfileCollection() {
+    if (!profileUser) return;
+
+    setAuthLoading('Syncing profile collection...');
+    setAuthError('');
+    setAuthMessage('');
+
+    try {
+      const entries = await cloudCollectionService.list(profileUser.id);
+      setCollection(entries);
+      setAuthMessage(entries.length ? 'Profile collection synced.' : 'No saved Pops in this profile yet.');
+    } catch (error) {
+      setAuthError(`Could not sync your profile collection. ${getErrorMessage(error)}`);
+    } finally {
+      setAuthLoading('');
+    }
+  }
+
   async function savePublicProfile(event: FormEvent) {
     event.preventDefault();
     if (!profileUser) return;
@@ -825,6 +860,7 @@ function App() {
           onProfilePublicChange={setProfilePublic}
           onProfileAvatarRemove={removeProfileAvatar}
           onProfileAvatarSelect={handleProfileAvatarSelect}
+          onRefreshProfileCollection={refreshProfileCollection}
           onPublicLookupChange={setProfileLookup}
           onPublicLookupClear={clearPublicLookup}
           onPublicLookupSubmit={handlePublicLookupSubmit}
@@ -1111,6 +1147,7 @@ function ProfileCard({
   onProfilePublicChange,
   onProfileAvatarRemove,
   onProfileAvatarSelect,
+  onRefreshProfileCollection,
   onSavePublicProfile,
   onSignIn,
   onSignOut,
@@ -1139,6 +1176,7 @@ function ProfileCard({
   onProfilePublicChange: (isPublic: boolean) => void;
   onProfileAvatarRemove: () => void;
   onProfileAvatarSelect: (file: File | null) => void;
+  onRefreshProfileCollection: () => void;
   onSavePublicProfile: (event: FormEvent) => void;
   onSignIn: (event: FormEvent) => void;
   onSignOut: () => void;
@@ -1261,6 +1299,14 @@ function ProfileCard({
               Share: <span className="profile-link">{profileShareUrl}</span>
             </p>
           )}
+          <button
+            className="secondary-button compact"
+            disabled={Boolean(authLoading)}
+            onClick={onRefreshProfileCollection}
+            type="button"
+          >
+            Sync collection
+          </button>
           {localCollectionCount > 0 && (
             <button
               className="secondary-button compact"
@@ -1405,6 +1451,7 @@ function CollectionPanel({
   onProfilePublicChange,
   onProfileAvatarRemove,
   onProfileAvatarSelect,
+  onRefreshProfileCollection,
   onPublicLookupChange,
   onPublicLookupClear,
   onPublicLookupSubmit,
@@ -1448,6 +1495,7 @@ function CollectionPanel({
   onProfilePublicChange: (isPublic: boolean) => void;
   onProfileAvatarRemove: () => void;
   onProfileAvatarSelect: (file: File | null) => void;
+  onRefreshProfileCollection: () => void;
   onPublicLookupChange: (handle: string) => void;
   onPublicLookupClear: () => void;
   onPublicLookupSubmit: (event: FormEvent) => void;
@@ -1498,6 +1546,7 @@ function CollectionPanel({
         onProfilePublicChange={onProfilePublicChange}
         onProfileAvatarRemove={onProfileAvatarRemove}
         onProfileAvatarSelect={onProfileAvatarSelect}
+        onRefreshProfileCollection={onRefreshProfileCollection}
         onSavePublicProfile={onSavePublicProfile}
         onSignIn={onSignIn}
         onSignOut={onSignOut}

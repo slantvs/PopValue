@@ -86,8 +86,8 @@ Server-only environment variables live in `.env`:
 - `EBAY_ENABLE_SOLD_LOOKUP` should only be enabled after Marketplace Insights access is approved.
 - `PORT` defaults to `8787`.
 - `VITE_API_BASE_URL` points the browser app at a hosted API when the frontend is deployed separately.
-- `VITE_SUPABASE_URL` enables Supabase Auth and profile collections.
-- `VITE_SUPABASE_ANON_KEY` is the public Supabase anon key for browser-side auth and RLS-protected collection writes.
+- `NEXT_PUBLIC_SUPABASE_URL` or `VITE_SUPABASE_URL` enables Supabase Auth and profile collections.
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, or `VITE_SUPABASE_ANON_KEY` is the public Supabase key for browser-side auth and RLS-protected collection writes.
 
 Do not prefix secrets with `VITE_`; that would expose them to the browser bundle.
 The Supabase anon key is safe for browser use when Row Level Security is enabled. Never expose the Supabase service role key.
@@ -95,11 +95,11 @@ Do not commit `.env`, screenshots of credentials, or eBay Cert IDs. If a Client 
 
 ## Supabase Profiles
 
-Run [supabase/schema.sql](supabase/schema.sql) in the Supabase SQL Editor, then set these Vercel production env vars:
+Run [supabase/schema.sql](supabase/schema.sql) in the Supabase SQL Editor, then set these Vercel production env vars. If you installed Supabase through the Vercel integration, PopValue can use the generated `NEXT_PUBLIC_SUPABASE_*` values directly.
 
 ```bash
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-public-anon-key
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-public-publishable-key
 ```
 
 Use the base Supabase project URL only. Do not use the Data API REST endpoint ending in `/rest/v1`.
